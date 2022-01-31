@@ -1,0 +1,879 @@
+---
+title: "Improving MCMC convergence diagnostic with a local version of R-hat: Multivariate simulations"
+author: "Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy"
+date: "6/18/2021"
+output: 
+  html_document: 
+    self_contained: no
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  comment = NA, 
+  cache = FALSE,
+  fig.width = 12,
+  fig.eight = 8,
+  dev = c("png", "pdf")
+)
+options(width = 100)
+
+# Working directory : localrhat
+r_folder <- "../R/"
+stan_folder <- "./stan_files/"
+```
+
+```{r, comment=NA, message=FALSE, warning=FALSE, results='hide', cache=FALSE}
+library("EnvStats")
+library('jmuOutlier')
+library("rstan")
+library("MASS") # For Multivariate Normal Distribution
+library("stableGR") # For the R-hat version of Vats and Knudson (2018)
+library("coda") # For an implementation of the multivariate R-hat of Brooks and Gelman (1998)
+library("rWishart") # Wishart distribution
+library("mcmc") # for logit data
+
+library("ggplot2")
+library("ggridges")
+
+
+devtools::load_all()
+
+source(paste(r_folder, "import/monitornew.R", sep=""))
+source(paste(r_folder, "import/r_star_monitor.R", sep=""))
+
+```
+
+# Multivariate examples
+
+In the multivariate case when $\boldsymbol{\theta}=(\theta_1, \ldots, \theta_d)\in{\mathbb R}^d$, 
+we suggest to apply $\hat{R}$ on a multivariate indicator variable 
+$I_{\boldsymbol{x}}^{(j)} = \mathbb{I}\{\theta_1^{(j)} \leq x_1, \ldots, \theta_d^{(j)} \leq x_d\}$ 
+for any $\boldsymbol{x} = (x_1, \ldots, x_d) \in \mathbb{R}^d$ in two steps:
+
+\begin{enumerate}
+    \item Compute the univariate $\hat{R}_{\infty,p}$ separately on each of the 
+    coordinates $p\in\{1,\dots,d\}$.
+    \item If $\hat{R}_{\infty,p} < 1.01$ for all $p\in\{1,\dots,d\}$, then all 
+    margins are deemed to have converged and to be identically distributed.
+    Compute the multivariate $\hat{R}_\infty$ to check the convergence of the 
+    dependence structure.
+\end{enumerate}
+
+Thus we recommend to compute the multivariate version only in the case where all the
+univariate one doesn't detect any convergence issue, this is why in the part we will
+focus only of cases where the margins are the same (for example uniform).
+
+
+```{r, include=FALSE}
+r_star_gbm <- function(chaines){
+  R_star_chains = aperm(chaines, c(1, 3, 2))
+  return (r_star(R_star_chains, method = "gbm"))
+}
+
+brooks_multivariate_rhat <- function(chaines){
+  R_star_chains = aperm(chaines, c(1, 3, 2))
+  return (r_hat_multivariate(R_star_chains, split_chains = F))
+}
+
+coda_multivariate_rhat <- function(chaines){
+  chaines_list = list()
+  for (i in 1:dim(chaines)[3]){
+    mcmc_ch <- as.mcmc(chaines[,,i])
+    chaines_list[[i]] <- as.mcmc(chaines[,,i])
+  }
+  mcmc_chains = do.call(mcmc.list, list(chaines_list))
+  return (gelman.diag(mcmc_chains)$mpsrf)
+}
+
+
+vats_multivariate_rhat <- function(chaines){
+  chaines_list = list()
+  for (i in 1:dim(chaines)[3]){
+    mcmc_ch <- as.mcmc(chaines[,,i])
+    chaines_list[[i]] <- chaines[,,i]
+  }
+  return (stable.GR(chaines_list)$mpsrf)
+}
+
+repetitions_R <- function(chains_func, r_func, r_names, 
+                          reps=100, saved_model=FALSE){
+  ncolumn <- length(r_func)
+  R_values <- c()
+  for (f in r_func){
+    vect <- c()
+    for (e in 1:reps){
+      if (saved_model){
+        chaines <- chains_func(e)
+      } else {
+        chaines <- chains_func() 
+      }
+      vect <- c(vect, f(chaines))
+    }
+    R_values = c(R_values, vect)
+  }
+  M <- matrix(data = R_values, ncol = ncolumn)
+  colnames(M) <- r_names
+  return (M)
+}
+
+colors <- c(rgb(0.1,0.6,0.1,0.7), rgb(0.1,0.1,0.7,0.7), rgb(0.5, 0, 0.5, 0.8), rgb(0.8, 0.1, 0.1, 0.8), rgb(1,0.6,0,0.8))
+
+```
+
+## Choice of threshold
+
+```{r, warning=FALSE}
+
+gen_mvnormal_chains <- function(M, N, d, S=NULL){
+  if (is.null(S)){
+    S = generate_sigma_matrix(d)
+  }
+  return (array(c(mvrnorm((M-1)*N, mu = rep(0, d), Sigma = diag(d)), 
+                  mvrnorm(N, mu = rep(0, d), Sigma = S)), 
+                c(N,d,M)))
+}
+
+d <- 3
+M <- 2
+N <- 200
+reps <- 200
+# sig_matrix <- (1-rho) * diag(2) + matrix(rho, nrow=2, ncol=2)
+
+
+r_functions = c(rhat_infinity)
+r_names = c("R-hat-infinity")
+r_colors = c(colors[3], colors[4])
+
+R_matrix = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d, S = diag(d))), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.01, 1.02, 1.03, 1.04)
+plot_hist(R_matrix, colors = r_colors, plot_threshold = T,
+          threshold = 1.01, xlabels = xlabels, bin_size = 0.0020, 
+          lim_y_axis = 100, vaxis_pos = 1)
+
+```
+
+
+
+```{r, warning=FALSE}
+
+d <- 3
+M <- 4
+N <- 100
+reps <- 200
+# sig_matrix <- (1-rho) * diag(2) + matrix(rho, nrow=2, ncol=2)
+
+
+r_functions = c(rhat_infinity)
+r_names = c("R-hat-infinity")
+r_colors = c(colors[3], colors[4])
+
+R_matrix = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d, S = diag(d))), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.01, 1.02, 1.03, 1.04)
+plot_hist(R_matrix, colors = r_colors, plot_threshold = F,
+          xlabels = xlabels, bin_size = 0.0018, 
+          lim_y_axis = 100, vaxis_pos = 1)
+
+```
+
+```{r, warning=FALSE}
+
+d <- 3
+M <- 8
+N <- 50
+reps <- 200
+# sig_matrix <- (1-rho) * diag(2) + matrix(rho, nrow=2, ncol=2)
+
+
+r_functions = c(rhat_infinity)
+r_names = c("R-hat-infinity")
+r_colors = c(colors[3], colors[4])
+
+R_matrix = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d, S = diag(d))), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.01, 1.02, 1.03, 1.04, 1.05)
+plot_hist(R_matrix, colors = r_colors, plot_threshold = F,
+          threshold = 1.03, xlabels = xlabels, bin_size = 0.002, 
+          lim_y_axis = 200, vaxis_pos = 1)
+
+```
+
+
+```{r, include=FALSE}
+get_r_lim_infinity <- function(M, N, alpha, d,
+                               reps = 100, N_estimation = 500){
+  
+  R_matrix <- repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N_estimation, d, S = diag(d))), 
+                                      r_func = c(rhat_infinity),
+                                      r_names = c("R-hat-infinity"),
+                                      reps = reps)
+  q <- quantile(N_estimation*M*(R_matrix**2 - 1), 
+                                 probs = c(1-alpha))
+  return (sqrt(1+ q/(N*M)))
+}
+
+d_range <- c(2, 3, 4, 5)
+m_range <- c(2, 4, 8) #, 10, 15)
+alpha_range <- c(0.01, 0.05, 0.1) #c(0.001, 0.005, 0.01, 0.05, 0.1)
+
+for (d in d_range){
+  r_lim_tab_d <- c()
+  for (m in m_range){
+    r_row <- c(m)
+    for (alpha in alpha_range){
+      r_row <- c(r_row, get_r_lim_infinity(M = m, N = 400/m, alpha = alpha, d = d))
+    }
+    r_lim_tab_d <- rbind(r_lim_tab_d, r_row)
+  }
+  colnames(r_lim_tab_d) <- c("m", alpha_range)
+  print(r_lim_tab_d)
+}
+```
+
+
+
+
+
+
+```{r, include=FALSE}
+get_r_lim_infinity <- function(M, N, alpha, d,
+                               reps = 100, N_estimation = 200){
+  
+  R_matrix <- repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N_estimation, d, S = diag(d))), 
+                                      r_func = c(rhat_infinity_max_directions),
+                                      r_names = c("max-R-hat"),
+                                      reps = reps)
+  q <- quantile(N_estimation*M*(R_matrix**2 - 1), 
+                                 probs = c(1-alpha))
+  return (sqrt(1+ q/(N*M)))
+}
+
+d_range <- c(2, 3, 4, 5)
+m_range <- c(2, 4, 8) #, 10, 15)
+alpha_range <- c(0.01, 0.05, 0.1) #c(0.001, 0.005, 0.01, 0.05, 0.1)
+
+for (d in d_range){
+  r_lim_tab_d <- c()
+  for (m in m_range){
+    r_row <- c(m)
+    for (alpha in alpha_range){
+      r_row <- c(r_row, get_r_lim_infinity(M = m, N = 400/m, alpha = alpha, 
+                                           d = d))
+    }
+    r_lim_tab_d <- rbind(r_lim_tab_d, r_row)
+  }
+  colnames(r_lim_tab_d) <- c("m", alpha_range)
+  print(r_lim_tab_d)
+}
+```
+
+
+
+
+
+
+## Bivariate Case: Normal distributions
+
+In this section, we focus on two-dimensional parameters on which we aim at 
+diagnose convergence of the corresponding MCMC (with any number of chains).
+This restriction allows to navigate easily between the positive dependence 
+and the negative one of the two components.
+
+In particular, we consider bivariate normal densities with zero means, and compare 
+$m-1$ chains with identity covariance matrix, and one with non-zero off-diagonal
+elements $\rho \in (-1,1)$.
+
+We start by define the function that will allows us to generate $m$ chains of 
+size $n$ with this configuration :
+
+```{r, warning=FALSE}
+gen_bvnormal_chains <- function(M, N, rho){
+  sig_matrix <- (1-rho) * diag(2) + matrix(rho, nrow=2, ncol=2)
+  return (array(c(mvrnorm((M-1)*N, mu = rep(0, 2), Sigma = diag(2)), 
+                  mvrnorm(N, mu = rep(0, 2), Sigma = sig_matrix)), c(N,2,M)))
+}
+```
+
+
+As an example, we consider the case with $m=4$ chains of size $n=100$, and 
+$\rho = 0.9$ on the last chain. 
+This choice of $n$ relatively small is due to the fact the elements in the chain
+are i.i.d here, so $n$ can be seen as an effective sample size for a given chain
+here.
+
+We simulate 100 experiments, which result as 100 draws of the different $\hat{R}$.
+
+Histogram of the corresponding values of $\hat{R}_\infty$ and the multivariate
+$\hat{R}$ of Brooks and Gelman (1998) :
+
+```{r bivariate_hists, warning=FALSE}
+rho <- 0.9
+M <- 2
+N <- 200
+reps <- 100
+
+r_functions = c(rhat_infinity, brooks_multivariate_rhat)
+r_names = c("R-hat-infinity", "Brooks Multivariate R-hat")
+r_colors = c(colors[3], colors[4])
+
+R_matrix = repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.02, 1.04, 1.06, 1.08, 1.1, 1.12)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_bivariate.pdf", width = 12, height = 7)
+plot_hist(R_matrix, colors = r_colors, bin_size = 0.0045, 
+          lim_y_axis = 30, vaxis_pos = 0.995,
+          xlabels = xlabels, plot_threshold = F)
+# dev.off()
+```
+
+In comparison, the value of $R^*$ of Lambert and Vehtari (2020) seems to detect 
+non-convergence but has the same reproducability issue as in the univariate case
+(+ slow):  
+
+```{r bivariate_rstar, warning=FALSE}
+rho <- 0.9
+M <- 4
+N <- 200
+reps <- 20
+
+r_functions <- c(r_star_gbm)
+r_names <- c("R-star")
+r_colors <- c(colors[2])
+
+R_matrix <- repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# plot_hist(R_matrix, colors = r_colors, nbreaks = 15, lim_y_axis = 10, plot_threshold = F)
+
+plot_hist(R_matrix, colors = r_colors, bin_size = 0.04, 
+          lim_y_axis = 10, vaxis_pos = 0.9,
+          plot_threshold = F)
+
+```
+
+Finally the version of Vats and Knudson (2018) is not giving satisfying results
+here:
+
+```{r, warning=FALSE}
+R_matrix_vats = repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                             r_func = c(vats_multivariate_rhat), 
+                             r_names = c("Vats Multivariate R-hat"), 
+                             reps = reps)
+print("Corresponding value of the R-hat version of Vats and Knudson (2018):")
+print(R_matrix_vats[,1])
+
+```
+
+### Evolution of the different value of $\hat{R}$ with $\rho$
+
+Except for $R^*$, we consider the mean of the 100 draws for the different 
+versions of $\hat{R}$, and plot the evolution of this value with $\rho$:
+
+```{r bivariate_rho, warning=FALSE}
+
+rho_list = c(-0.99, -0.9, -0.7, -0.5, -0.2, 0, 0.2, 0.5, 0.7, 0.9, 0.99)
+
+d <- 2
+M <- 2
+N <- 500
+reps <- 10
+
+
+r_functions <- c(rhat_infinity, brooks_multivariate_rhat)
+r_names <- c("R-hat-infinity", "Brooks R-hat")
+
+R_values <- c()
+x_val <- c()
+theoretical_R <- c()
+
+
+for (rho in rho_list){
+  R_val_rho = repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                                    r_func = r_functions, 
+                                    r_names = r_names, 
+                                    reps = reps)
+  R_values = rbind(R_values, R_val_rho)
+  x_val = c(x_val, rep(rho, reps))
+  
+  sig_matrix <- (1-rho) * diag(2) + matrix(rho, nrow=2, ncol=2)
+  dists <- c((function(q) mvtnorm::pmvnorm(upper = q, sigma = diag(2))[1]),
+             (function(q) mvtnorm::pmvnorm(upper = q, sigma = sig_matrix)[1]))
+  theoretical_R = c(theoretical_R, max_r_dist_bivariate(npoints = 200, 
+                                                        xlim = c(-3,3), 
+                                                        dists = dists))
+}
+
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/rho_curve.pdf", width = 12, height = 7)
+par(mar=c(4,5.5,2,2))
+plot(x=x_val, y=R_values[,1],
+     col = c(colors[3]), pch = 19,
+     xlab = expression(rho["m"]), ylab = "",
+     xaxs="i", yaxs="i", bty = "n",
+     xaxt = "n", yaxt = "n",
+     cex.lab = 2, cex.main = 2,
+     lwd=9,
+     xlim = c(-1.01, 1.02), ylim = c(0.999,1.155))
+points(x=x_val, y=R_values[,2], 
+       col = c(colors[4]), pch = 19,
+       lwd=9)
+lines(rho_list, theoretical_R, type="l", col = colors[2], lwd=6, lty = 2)
+points(x=rho_list, y=theoretical_R, 
+       col = c(colors[2]), pch = 19,
+       lwd=9)
+xlabels = c(1, 1.03, 1.06, 1.09, 1.12, 1.15)
+ylabels = c(-1, -0.5, 0, 0.5, 1)
+axis(1, labels=ylabels, at=ylabels, cex.axis=2, lwd=3, mgp = c(1,1,0))
+axis(2, labels=xlabels, at=xlabels, cex.axis=2, mgp = c(1,0.5,0), lwd=2)
+legend(x=0.6, y=1.14, col=c(colors[4], colors[3], colors[2]), pch=19, 
+       legend = c(expression(italic(hat(R))),
+                  expression(italic(hat(R)[infinity])),
+                  expression(italic(R[infinity]))), cex=2)
+# dev.off()
+```
+
+Remarks : 
+
+- Our version is the most sensitive, and is more sensitive as $|\rho|$ increases
+(which is great)
+- The asymmetry can be link to the theoretical computations.
+WARNING: in the case where $d=2$, the orders on the two bounds PQD and NQD are 
+inverted (compared to the asymptotic behavior), and that is why here we are 
+more sensitive when $\rho < 0$ (which is counter-intuitive)
+
+
+```{r, include=FALSE, warning=FALSE}
+
+d <- 2
+M <- 2
+N <- 500
+reps <- 10
+
+rho <- -0.9
+
+r_functions <- c(coda_multivariate_rhat, brooks_multivariate_rhat)
+r_names <- c("Brooks multivariate Rhat (Coda)", "Brooks multivariate Rhat (Lambert)")
+
+R_matrix <- repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# print(R_matrix)
+# print(abs(R_matrix[,1]-R_matrix[,2]))
+```
+
+
+## General number of dimensions
+
+### Generation of a covariance matrix
+
+In the general case, we still compare $m-1$ chains that follows a multivariate
+normal distribution with identity covariance matrix with one that has a given 
+covariance matrix $\Sigma$. 
+
+We generate $\Sigma$ from a sample of a Wishart distribtution $S$, and in order 
+to keep the same margins for our chains, we transform $S$ to have ones on the
+diagonal :
+$$
+\Sigma = D^{-1/2} S D^{-1/2}, 
+\quad \text{ with } \quad 
+D = \text{Diag}\left(s_{1,1}, \ldots, s_{d,d}\right)
+$$
+
+From the theoretical part, we know that the value given by $\hat{R}_\infty$ 
+depends on the direction of dependence.
+Thus, we can either fix $\Sigma$ and study the behaviour of the different 
+$\hat{R}$, or sample a new $\Sigma$ for each draw of $\hat{R}$.
+
+```{r, warning=FALSE}
+
+generate_sigma_matrix <- function(d){
+  S <- rWishart(1, d, diag(d))[,,1]
+  S <- diag(1/sqrt(diag(S))) %*% S %*% diag(1/sqrt(diag(S)))
+  return (S)
+}
+
+gen_mvnormal_chains <- function(M, N, d, S=NULL){
+  if (is.null(S)){
+    S <- generate_sigma_matrix(d)
+  }
+  return (array(c(mvrnorm((M-1)*N, mu = rep(0, d), Sigma = diag(d)), 
+                  mvrnorm(N, mu = rep(0, d), Sigma = S)), 
+                c(N,d,M)))
+}
+
+```
+
+First, we start by considering $d=5$ and study the behavior of $\hat{R}_\infty$
+and the multivariate $\hat{R}$ of Brooks and Gelman (1998) on a given $\Sigma$
+for the last chain:
+
+```{r multivariate_hist1, warning=FALSE}
+
+d <- 5
+
+M <- 4
+N <- 100
+reps <- 100
+
+r_functions <- c(brooks_multivariate_rhat, rhat_infinity)
+r_names <- c("Brooks Multivariate R-hat", "R-hat-infinity")
+r_colors <- c(colors[3], colors[4])
+
+S <- generate_sigma_matrix(d)
+print(S)
+
+R_matrix <- repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d, S)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# plot_hist(R_matrix, colors = r_colors, nbreaks = 20, lim_y_axis = 30, plot_threshold = F)
+plot_hist(R_matrix, colors = r_colors, bin_size = 0.002, 
+          lim_y_axis = 25, vaxis_pos = 1,
+          plot_threshold = F)
+
+```
+
+Doing the same experiment but with a new $\Sigma$ on each repetitions will
+result on a histogram more spread for $\hat{R}_\infty$:
+
+```{r multivariate_hist2, warning=FALSE}
+
+
+d <- 5
+
+M <- 4
+N <- 100
+reps <- 100
+
+r_functions <- c(brooks_multivariate_rhat, rhat_infinity)
+r_names <- c("Brooks Multivariate R-hat", "R-hat-infinity")
+r_colors <- c(colors[3], colors[4])
+
+R_matrix <- repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# plot_hist(R_matrix, colors = r_colors, nbreaks = 20, lim_y_axis = 30, plot_threshold = F)
+xlabels = c(1, 1.02, 1.04, 1.06, 1.08)
+plot_hist(R_matrix, colors = r_colors, 
+          xlabels = xlabels, bin_size = 0.002, 
+          lim_y_axis = 20, vaxis_pos = 0.997,
+          plot_threshold = F)
+
+```
+
+\textit{Le problème en grande dimension : aucun point n'a toutes ces coordonnées plus petite que les autres ! Déjà lorsque d = 2, le problème est déjà présent avec plusieurs points produisant des NaN values. Exemple avec d=2, N=100, M=2:
+
+-0.9640542 -2.8385044
+-0.7183567 -3.3431770
+-2.579755 -1.719382
+-1.762459 -1.977133
+
+Tout ces points sont des """minimas""", à l'inverse du cas d=1 où 1 seul est possible.}
+
+To avoid this issue, $\hat{R}_\infty$ can be computed on all directions, 
+which means if $d=3$ that $\hat{R}$ is computed on 
+$$
+  I\left(\theta_1^{(n,m)} \leq x_1, \theta_2^{(n,m)} \leq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+  I\left(\theta_1^{(n,m)} \geq x_1, \theta_2^{(n,m)} \leq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+  I\left(\theta_1^{(n,m)} \leq x_1, \theta_2^{(n,m)} \geq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+  I\left(\theta_1^{(n,m)} \geq x_1, \theta_2^{(n,m)} \geq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+$$
+The other half of the possibilities is avoided by symmetry. 
+Then, we can define $\hat{R}^{(\text{max})}_\infty$ as the maximum of all the 
+$\hat{R}_\infty$ computed on all directions.
+Despite a unreasonable computational cost (with $2^{d-1}$ $\hat{R}_\infty$ 
+to compute), this solutions seems satisfying in small dimension:
+
+```{r r_dimensions, warning=FALSE}
+
+# d_max = 6
+# 
+# M = 4
+# N = 100
+# reps = 200
+# 
+# 
+# r_functions = c(rhat_infinity, rhat_infinity_max_directions)
+# r_names = c("One Direction", "All Directions")
+# 
+# R_values = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, 2)), 
+#                          r_func = r_functions, 
+#                          r_names = r_names, 
+#                          reps = reps)
+# 
+# 
+# R_array = array(c(R_values[,1], rep("d = 2", reps), rep("1 Dir", reps)), dim = c(reps,3))
+# R_array = rbind(R_array, array(c(R_values[,2], rep("d = 2", reps), rep("All Dir", reps)), dim = c(reps,3)))
+# colnames(R_array) = c("Values", "Dim", "Nb_Dir")
+# 
+# for (d in 3:d_max){
+#   R_val_d = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d)), 
+#                              r_func = r_functions, 
+#                              r_names = r_names, 
+#                              reps = reps)
+#   d_names = c(paste("d =", d))
+#   R_array = rbind(R_array, array(c(R_val_d[,1], rep(d_names, reps), rep("1 Dir", reps)), dim = c(reps,3)))
+#   R_array = rbind(R_array, array(c(R_val_d[,2], rep(d_names, reps), rep("All Dir", reps)), dim = c(reps,3)))
+# 
+# }
+# 
+# R_df = as.data.frame(R_array)
+# R_df$Values = as.numeric(R_df$Values)
+# 
+# # pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_directions.pdf", width = 18, height = 8)
+# ggplot(R_df, aes(x = Values, y = as.factor(Dim), fill = Nb_Dir)) + 
+#   geom_density_ridges(stat = "binline", bins= 40,
+#                       scale = 1, alpha = 0.7) +
+#   scale_y_discrete(limits = R_df$Dim) +
+#   ylab("Dimensions") + labs(fill = element_blank()) +
+#   scale_x_continuous(limits = c(1,1.14),
+#                      n.breaks = 8) +
+#   scale_fill_manual(values=c("#32a632", "#4287f5")) +
+#   theme_ridges(font_size=22)
+# # dev.off()
+
+```
+
+(WARNING: $d>6$ the chunk is very dangerous to run!!)
+
+## Logistic regression
+
+As a practical bayesian example, we consider hierarchical logistic regression using 
+the following model:
+
+```{r, warning=FALSE}
+writeLines(readLines(paste(stan_folder, "logit_reg.stan", sep="")))
+```
+
+We run Stan using the dataset \texttt{logit} available in the package \texttt{mcmc}.
+
+```{r, warning=FALSE}
+data("logit")
+d <- 4
+logit_data<- read_rdump(paste(stan_folder, "logit_reg.data.R", sep=""))
+fit_logit <- stan(file = paste(stan_folder, "logit_reg.stan", sep=""),
+                  data=logit_data, seed = 12,
+                  iter=400, chains=4, refresh=0)
+mon <- monitor(fit_logit)
+
+chains <- as.array(fit_logit)
+dim_chains <- dim(chains)
+
+rhat_inf <- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i <- chains[, , i]
+  rhat_inf_i <- rhat_infinity(chains_i, max_nb_points = "ALL")
+  rhat_inf <- c(rhat_inf, rhat_inf_i)
+}
+
+mon[["Rhat_inf"]] <- rhat_inf
+
+mon
+summary(mon[1:d, 'Rhat'])
+summary(mon[1:d, 'Rhat_inf'])
+
+mon[d+1, "Rhat_inf"]
+
+perm_chains <- aperm(chains, c(1,3,2))
+rhat_infinity_max_directions(perm_chains)
+```
+
+```{r, warning=FALSE}
+reps <- 50
+
+gen_beta_logit <- function(i){
+  # fit_logit <- stan(file = paste(stan_folder, "logit_reg.stan", sep=""),
+                    # data=logit_data,
+                    # iter=400, chains=4, refresh=0)
+  # saveRDS(fit_logit, paste(stan_folder, "logit/logit_reg_", i, ".rds", sep=""))
+  fit_logit <- readRDS(paste(stan_folder, "logit/logit_reg_", i, ".rds", sep=""))
+  mon <- monitor(fit_logit)
+  
+  chains <- as.array(fit_logit)
+  
+  return (aperm(chains, c(1,3,2)))
+}
+
+r_functions = c(brooks_multivariate_rhat, rhat_infinity_max_directions)
+r_names = c("Brooks Multivariate R-hat", "max-R-hat")
+r_colors = c(colors[4], colors[5])
+
+R_matrix_logit <- repetitions_R(chains_func = gen_beta_logit, 
+                                 r_func = r_functions, 
+                                 r_names = r_names, 
+                                 reps = reps, saved_model = TRUE)
+
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_logit.pdf", width = 12, height = 7)
+plot_hist(R_matrix_logit, colors = r_colors, 
+          vaxis_pos = 0.998,
+          bin_size = 0.003, lim_y_axis = 25)
+# dev.off()
+```
+
+
+```{r, warning=FALSE}
+
+gen_beta_logit_lp <- function(i){
+  fit_logit <- readRDS(paste(stan_folder, "logit/logit_reg_", i, ".rds", sep=""))
+  mon <- monitor(fit_logit)
+  chains <- as.array(fit_logit)
+  return (chains[, , 5])
+}
+
+r_functions <- c(rhat_infinity)
+r_names <- c("R-hat-infinity")
+r_colors <- c(colors[3])
+
+R_matrix_logit2 <- repetitions_R(chains_func = gen_beta_logit_lp, 
+                                 r_func = r_functions, 
+                                 r_names = r_names, 
+                                 reps = reps, saved_model = TRUE)
+
+xlabels = c(1, 1.005, 1.01, 1.015, 1.02, 1.025)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_logit2.pdf", width = 12, height = 7)
+plot_hist(R_matrix_logit2, colors = r_colors,
+          xlabels = xlabels,
+          bin_size = 0.002, lim_y_axis = 25)
+# dev.off()
+```
+
+
+# Wide multivariate normal
+
+```{r, warning=FALSE}
+writeLines(readLines(paste(stan_folder, "mvn.stan", sep="")))
+```
+
+```{r, warning=FALSE}
+generate_sigma_matrix <- function(d){
+  S = rWishart(1, d, diag(d))[,,1]
+  S = diag(1/sqrt(diag(S))) %*% S %*% diag(1/sqrt(diag(S)))
+  return (S)
+}
+
+d <- 8
+A <- generate_sigma_matrix(d)
+fit <- stan(file = paste(stan_folder, "mvn.stan", sep=""), data=list(N=d, A=A), iter=400, chains=4, refresh = 0)
+mon <- monitor(fit)
+
+chains <- as.array(fit)
+dim_chains <- dim(chains)
+
+rhat_inf <- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i <- chains[, , i]
+  rhat_inf_i <- rhat_infinity(chains_i, max_nb_points = "ALL")
+  rhat_inf <- c(rhat_inf, rhat_inf_i)
+}
+
+mon[["Rhat_inf"]] <- rhat_inf
+# summary(mon[1:d, 'Rhat_inf'])
+mon
+# mon[d+1, "Rhat_inf"]
+```
+
+
+```{r, warning=FALSE}
+which_max_rhat_inf <- which.max(mon[1:d, 'Rhat_inf'])
+
+simulated_rhat = all_local_rhat(chains[ , , which_max_rhat_inf], max_nb_points = "ALL")
+plot_local_r(chains[ , , which_max_rhat_inf], simulated_rhat,
+             col=c(colors[3], colors[2]),
+             xlim = c(-3,3), ylim=c(0.997,1.02), title ="")
+```
+
+
+```{r, warning=FALSE}
+simulated_rhat = all_local_rhat(chains[ , , d+1], max_nb_points = "ALL")
+plot_local_r(chains[ , , d+1], simulated_rhat,
+             col=c(colors[3], colors[2]),
+             xlim = c(min(chains), 0), ylim=c(0.997,1.02), title ="")
+```
+
+
+```{r, warning=FALSE}
+perm_chains <- aperm(chains, c(1,3,2))
+rhat_infinity_max_directions(perm_chains)
+```
+
+
+```{r, warning=FALSE}
+d <- 8
+A <- generate_sigma_matrix(d)
+fit_mvn <- stan(file = paste(stan_folder, "mvn.stan", sep=""), data=list(N=d, A=A), iter=800, chains=4, refresh = 0)
+mon <- monitor(fit_mvn)
+
+chains <- as.array(fit_mvn)
+dim_chains <- dim(chains)
+
+rhat_inf <- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i <- chains[, , i]
+  rhat_inf_i <- rhat_infinity(chains_i, max_nb_points = "ALL")
+  rhat_inf <- c(rhat_inf, rhat_inf_i)
+}
+
+mon[["Rhat_inf"]] <- rhat_inf
+mon
+summary(mon[1:d, 'Rhat_inf'])
+
+# mon[d+1, "Rhat_inf"]
+```
+
+
+```{r, warning=FALSE}
+perm_chains <- aperm(chains, c(1,3,2))
+rhat_infinity_max_directions(perm_chains)
+```
+
+
+
+```{r, warning=FALSE}
+d <- 8
+A <- generate_sigma_matrix(d)
+fit <- stan(file = paste(stan_folder, "mvn.stan", sep=""), data=list(N=d, A=A), iter=100, chains=4, refresh = 0)
+mon <- monitor(fit)
+
+chains <- as.array(fit)
+dim_chains <- dim(chains)
+
+rhat_inf <- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i <- chains[, , i]
+  rhat_inf_i <- rhat_infinity(chains_i, max_nb_points = "ALL")
+  rhat_inf <- c(rhat_inf, rhat_inf_i)
+}
+
+mon[["Rhat_inf"]] <- rhat_inf
+# summary(mon[1:d, 'Rhat_inf'])
+mon
+# mon[d+1, "Rhat_inf"]
+perm_chains <- aperm(chains, c(1,3,2))
+vats_multivariate_rhat(perm_chains)
+```
+

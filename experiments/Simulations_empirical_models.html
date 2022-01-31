@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy" />
+
+
+<title>Improving MCMC convergence diagnostic with a local version of R-hat: Empirical models</title>
+
+<script src="Simulations_empirical_models_files/header-attrs-2.11/header-attrs.js"></script>
+<script src="Simulations_empirical_models_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="Simulations_empirical_models_files/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="Simulations_empirical_models_files/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="Simulations_empirical_models_files/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="Simulations_empirical_models_files/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="Simulations_empirical_models_files/navigation-1.1/tabsets.js"></script>
+<link href="Simulations_empirical_models_files/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="Simulations_empirical_models_files/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Improving MCMC convergence diagnostic with a local version of R-hat: Empirical models</h1>
+<h4 class="author">Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy</h4>
+<h4 class="date">6/18/2021</h4>
+
+</div>
+
+<div id="TOC">
+<ul>
+<li><a href="#autoregressive-model">Autoregressive model</a>
+<ul>
+<li><a href="#plot-of-r-hatx">Plot of R-hat(x)</a></li>
+<li><a href="#repetitions-comparison-of-different-r-hat">Repetitions: comparison of different R-hat</a></li>
+</ul></li>
+<li><a href="#cauchy">Cauchy</a>
+<ul>
+<li><a href="#nominal-parameterization">Nominal parameterization</a>
+<ul>
+<li><a href="#plot-of-r-hatx-1">Plot of R-hat(x)</a></li>
+<li><a href="#repetitions-comparison-of-different-r-hat-1">Repetitions: comparison of different R-hat</a></li>
+</ul></li>
+<li><a href="#alternative-parameterization">Alternative parameterization</a>
+<ul>
+<li><a href="#plot-of-r-hatx-2">Plot of R-hat(x)</a></li>
+<li><a href="#repetitions-comparison-of-different-r-hat-2">Repetitions: comparison of different R-hat</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#hierarchical-model-eight-schools">Hierarchical model: Eight Schools</a>
+<ul>
+<li><a href="#centered-eight-schools-model">Centered Eight Schools model</a>
+<ul>
+<li><a href="#plot-of-r-hatx-3">Plot of R-hat(x)</a></li>
+<li><a href="#repetitions-comparison-of-different-r-hat-3">Repetitions: comparison of different R-hat</a></li>
+</ul></li>
+<li><a href="#non-centered-eight-schools-model">Non-centered Eight Schools model</a>
+<ul>
+<li><a href="#plot-of-r-hatx-4">Plot of R-hat(x)</a></li>
+<li><a href="#repetitions-comparison-of-different-r-hat-4">Repetitions: comparison of different R-hat</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#conclusion">Conclusion</a></li>
+</ul>
+</div>
+
+<pre class="r"><code>library(&quot;EnvStats&quot;)
+library(&#39;jmuOutlier&#39;)
+library(&quot;ggplot2&quot;)
+library(&quot;rstan&quot;)
+
+source(paste(r_folder, &quot;import/monitornew.R&quot;, sep=&quot;&quot;))
+
+source(paste(r_folder, &quot;import/r_star_monitor.R&quot;, sep=&quot;&quot;))
+
+devtools::load_all()
+
+N &lt;- 500
+reps &lt;- 50</code></pre>
+<p>In this part, we will apply our Rhat on different models in order to show its efficiency in general cases.</p>
+<div id="autoregressive-model" class="section level1">
+<h1>Autoregressive model</h1>
+<p>All the indicators except the traditional Rhat manage to detect a convergence issue. the R* estimated by 1.436 is significantly higher than the others with a bigger variance as well. And the histograms clearly show it.</p>
+<pre class="r"><code>autoregressive &lt;- function(n, rho, sigma){
+  chain &lt;- c()
+  pre &lt;- 0
+  eps &lt;- rnorm(n, 0, sigma)
+  for (t in 1:n){
+    suiv &lt;- rho*pre+eps[t]
+    chain &lt;- c(chain, suiv)
+    pre &lt;- suiv
+  }
+  return(chain)
+}
+
+gen_autoreg_chains &lt;- function(M, N, rho, sigma, sigmaM){
+  return (array(c(replicate(M-1, autoregressive(N, rho, sigma)), 
+                  autoregressive(N, rho, sigmaM)), c(N,M)))
+}</code></pre>
+<div id="plot-of-r-hatx" class="section level2">
+<h2>Plot of R-hat(x)</h2>
+<pre class="r"><code>M &lt;- 4
+sigma &lt;- 1
+sigmaM &lt;- 1/3
+rho &lt;- 0.3
+
+
+chaines = gen_autoreg_chains(M, N, rho, sigma, sigmaM)
+simulated_rhat = all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+plot_local_r(chaines, simulated_rhat,
+             xlim = c(-5,5), ylim=c(1,1.06), title =&quot;Uniform distribution&quot;)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-4-1.png" width="864" /></p>
+</div>
+<div id="repetitions-comparison-of-different-r-hat" class="section level2">
+<h2>Repetitions: comparison of different R-hat</h2>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[1], colors[2], colors[3])
+
+R_matrix &lt;- repetitions_R(chains_func = (function() gen_autoreg_chains(M, N, rho, sigma, sigmaM)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+plot_hist(R_matrix, colors = r_colors, bin_size = 0.004, lim_y_axis = reps)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/uniform_hist-1.png" width="864" /></p>
+</div>
+</div>
+<div id="cauchy" class="section level1">
+<h1>Cauchy</h1>
+<p>In this section, we will study two parameterization of Cauchy using HMC: - Nominal parameterization which is a direct one. - Alternative parameterization which is a scale mixture of Gaussians.</p>
+<p>To study these two parametrizations we will use rank plots which illustrate a mixing problem if they are not uniform. First we will look for an element of the vector for which our <span class="math inline">\(\hat R\)</span> is one of the highest. Here we want rather to study the tail of the distribution than the bulk because of the thick tail of the Cauchy distribution. Finally, we will use the rank plots of this element found to know if we have a mixing problem or not.</p>
+<div id="nominal-parameterization" class="section level2">
+<h2>Nominal parameterization</h2>
+<p>Model :</p>
+<pre class="r"><code>writeLines(readLines(paste(stan_folder, &quot;cauchy_nom.stan&quot;, sep=&quot;&quot;)))</code></pre>
+<pre><code>parameters {
+  vector[50] x;
+}
+
+model {
+  x ~ cauchy(0, 1);
+}
+
+generated quantities {
+  real I = fabs(x[1]) &lt; 1 ? 1 : 0;
+}</code></pre>
+<pre class="r"><code>fit_nom &lt;- stan(file = paste(stan_folder, &quot;cauchy_nom.stan&quot;, sep=&quot;&quot;), seed = 7878, refresh = 0)</code></pre>
+<pre><code>Trying to compile a simple C file</code></pre>
+<pre><code>Running /usr/lib/R/bin/R CMD SHLIB foo.c
+gcc -std=gnu99 -std=gnu11 -I&quot;/usr/share/R/include&quot; -DNDEBUG   -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/Rcpp/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/unsupported&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/BH/include&quot; -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/src/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppParallel/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/rstan/include&quot; -DEIGEN_NO_DEBUG  -DBOOST_DISABLE_ASSERTS  -DBOOST_PENDING_INTEGER_LOG2_HPP  -DSTAN_THREADS  -DBOOST_NO_AUTO_PTR  -include &#39;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp&#39;  -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1      -fpic  -g -O2 -fdebug-prefix-map=/build/r-base-J7pprH/r-base-4.1.2=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -g  -c foo.c -o foo.o
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:88:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:1: error: unknown type name ‘namespace’
+ namespace Eigen {
+ ^~~~~~~~~
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:17: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘{’ token
+ namespace Eigen {
+                 ^
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:96:10: fatal error: complex: Aucun fichier ou dossier de ce type
+ #include &lt;complex&gt;
+          ^~~~~~~~~
+compilation terminated.
+/usr/lib/R/etc/Makeconf:168: recipe for target &#39;foo.o&#39; failed
+make: *** [foo.o] Error 1</code></pre>
+<pre class="r"><code>mon &lt;- monitor(fit_nom)
+
+which_max_rhat &lt;- which.max(mon[1:50, &#39;Rhat&#39;])
+max_rhat &lt;- max(mon[1:50, &#39;Rhat&#39;])
+
+subset(mon, Rhat == max_rhat)</code></pre>
+<pre><code>Inference for the input samples ( chains: each with iter = ; warmup = ):
+
+        Q5  Q50    Q95  Mean   SD  Rhat Bulk_ESS Tail_ESS
+x[18] -4.1 0.56 172.82 35.87 65.4  1.54        7       32
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<div id="plot-of-r-hatx-1" class="section level3">
+<h3>Plot of R-hat(x)</h3>
+<pre class="r"><code>chains &lt;- as.array(fit_nom)
+dim_chains &lt;- dim(chains)
+
+rhat_inf &lt;- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i &lt;- chains[, , i]
+  rhat_inf_i &lt;- rhat_infinity(chains_i)
+  rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+}
+
+mon[[&quot;Rhat_if&quot;]] &lt;- rhat_inf
+which_max_rhat_inf &lt;- which.max(mon[1:50, &#39;Rhat_if&#39;])
+  
+simulated_rhat = all_local_rhat(chains[ , , which_max_rhat_inf], max_nb_points = &quot;ALL&quot;)
+
+xlabels = 1:10
+plot_local_r(chains[ , , which_max_rhat_inf], simulated_rhat, xlabels = xlabels,
+             xlim = c(-5,250), ylim=c(1,10), title =&quot;Cauchy Distribution&quot;)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-7-1.png" width="864" /></p>
+</div>
+<div id="repetitions-comparison-of-different-r-hat-1" class="section level3">
+<h3>Repetitions: comparison of different R-hat</h3>
+<pre class="r"><code>gen_diverging_cauchy &lt;- function(){
+  fit_nom &lt;- stan(file = paste(stan_folder, &quot;cauchy_nom.stan&quot;, sep=&quot;&quot;), refresh = 0)
+  mon &lt;- monitor(fit_nom)
+  chains &lt;- as.array(fit_nom)
+  dim_chains &lt;- dim(chains)
+  
+  rhat_inf &lt;- c()
+  
+  for (i in 1:dim_chains[3]) {
+    chains_i &lt;- chains[, , i]
+    rhat_inf_i &lt;- rhat_infinity(chains_i)
+    rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+  }
+  mon[[&quot;Rhat_inf&quot;]] &lt;- rhat_inf
+  which_max_rhat_inf &lt;- which.max(mon[1:50, &#39;Rhat_inf&#39;])
+  
+  return (chains[, , which_max_rhat_inf])
+}
+
+r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[1], colors[2], colors[3])
+
+R_matrix &lt;- repetitions_R(chains_func = gen_diverging_cauchy, 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.2, 1.4, 1.6, 1.8, 2)
+plot_hist(R_matrix, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.1, lim_y_axis = reps)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-8-1.png" width="864" /></p>
+</div>
+</div>
+<div id="alternative-parameterization" class="section level2">
+<h2>Alternative parameterization</h2>
+<p>Model :</p>
+<pre class="r"><code>writeLines(readLines(paste(stan_folder, &quot;cauchy_alt_1.stan&quot;, sep=&quot;&quot;)))</code></pre>
+<pre><code>parameters {
+  vector[50] x_a;
+  vector&lt;lower=0&gt;[50] x_b;
+}
+
+transformed parameters {
+  vector[50] x = x_a ./ sqrt(x_b);
+}
+
+model {
+  x_a ~ normal(0, 1);
+  x_b ~ gamma(0.5, 0.5);
+}
+
+generated quantities {
+  real I = fabs(x[1]) &lt; 1 ? 1 : 0;
+}</code></pre>
+<pre class="r"><code>fit_alt1 &lt;- stan(file = paste(stan_folder, &quot;cauchy_alt_1.stan&quot;, sep=&quot;&quot;), seed = 7878, refresh = 0)</code></pre>
+<pre><code>Trying to compile a simple C file</code></pre>
+<pre><code>Running /usr/lib/R/bin/R CMD SHLIB foo.c
+gcc -std=gnu99 -std=gnu11 -I&quot;/usr/share/R/include&quot; -DNDEBUG   -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/Rcpp/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/unsupported&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/BH/include&quot; -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/src/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppParallel/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/rstan/include&quot; -DEIGEN_NO_DEBUG  -DBOOST_DISABLE_ASSERTS  -DBOOST_PENDING_INTEGER_LOG2_HPP  -DSTAN_THREADS  -DBOOST_NO_AUTO_PTR  -include &#39;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp&#39;  -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1      -fpic  -g -O2 -fdebug-prefix-map=/build/r-base-J7pprH/r-base-4.1.2=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -g  -c foo.c -o foo.o
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:88:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:1: error: unknown type name ‘namespace’
+ namespace Eigen {
+ ^~~~~~~~~
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:17: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘{’ token
+ namespace Eigen {
+                 ^
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:96:10: fatal error: complex: Aucun fichier ou dossier de ce type
+ #include &lt;complex&gt;
+          ^~~~~~~~~
+compilation terminated.
+/usr/lib/R/etc/Makeconf:168: recipe for target &#39;foo.o&#39; failed
+make: *** [foo.o] Error 1</code></pre>
+<pre class="r"><code>mon &lt;- monitor(fit_alt1)
+
+
+which_max_rhat &lt;- which.max(mon[101:150, &#39;Rhat&#39;])
+max_rhat &lt;- max(mon[101:150, &#39;Rhat&#39;])
+subset(mon, Rhat == max_rhat)</code></pre>
+<pre><code>Inference for the input samples ( chains: each with iter = ; warmup = ):
+
+         Q5  Q50  Q95  Mean     SD  Rhat Bulk_ESS Tail_ESS
+x[40] -6.22 0.03 6.33 -6.15 204.09     1     3667     2250
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<div id="plot-of-r-hatx-2" class="section level3">
+<h3>Plot of R-hat(x)</h3>
+<pre class="r"><code>chains &lt;- as.array(fit_alt1)
+dim_chains &lt;- dim(chains)
+
+rhat_inf &lt;- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i &lt;- chains[, , i]
+  rhat_inf_i &lt;- rhat_infinity(chains_i)
+  rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+}
+
+mon[[&quot;Rhat_inf&quot;]] &lt;- rhat_inf
+which_max_rhat_inf &lt;- which.max(mon[101:150, &#39;Rhat_inf&#39;])
+  
+simulated_rhat = all_local_rhat(chains[ , , which_max_rhat_inf], max_nb_points = &quot;ALL&quot;)
+
+xlabels = c(1, 1.0025, 1.005, 1.0075, 1.01)
+plot_local_r(chains[, , which_max_rhat], simulated_rhat, xlabels = xlabels,
+             xlim = c(-5,5), ylim=c(0.9995,1.01), title =&quot;Alternative Cauchy distribution&quot;)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-11-1.png" width="864" /></p>
+</div>
+<div id="repetitions-comparison-of-different-r-hat-2" class="section level3">
+<h3>Repetitions: comparison of different R-hat</h3>
+<pre class="r"><code>gen_converging_cauchy &lt;- function(){
+  fit_nom &lt;- stan(file = paste(stan_folder, &quot;cauchy_alt_1.stan&quot;, sep=&quot;&quot;), refresh = 0)
+  mon &lt;- monitor(fit_nom)
+  chains &lt;- as.array(fit_nom)
+  dim_chains &lt;- dim(chains)
+  
+  rhat_inf &lt;- c()
+  
+  for (i in 1:dim_chains[3]) {
+    chains_i &lt;- chains[, , i]
+    rhat_inf_i &lt;- rhat_infinity(chains_i)
+    rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+  }
+  mon[[&quot;Rhat_inf&quot;]] &lt;- rhat_inf
+  which_max_rhat_inf &lt;- which.max(mon[101:150, &#39;Rhat_inf&#39;])
+  
+  return (chains[, , which_max_rhat_inf])
+}
+
+r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[1], colors[2], colors[3])
+
+R_matrix &lt;- repetitions_R(chains_func = gen_converging_cauchy, 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.2, 1.4, 1.6, 1.8, 2)
+plot_hist(R_matrix, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.1, lim_y_axis = reps)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-12-1.png" width="864" /></p>
+</div>
+</div>
+</div>
+<div id="hierarchical-model-eight-schools" class="section level1">
+<h1>Hierarchical model: Eight Schools</h1>
+<p>Model :</p>
+<pre class="r"><code>writeLines(readLines(paste(stan_folder, &quot;eight_schools_cp.stan&quot;, sep=&quot;&quot;)))</code></pre>
+<pre><code>data {
+  int&lt;lower=0&gt; J;
+  real y[J];
+  real&lt;lower=0&gt; sigma[J];
+}
+
+parameters {
+  real mu;
+  real&lt;lower=0&gt; tau;
+  real theta[J];
+}
+
+model {
+  mu ~ normal(0, 5);
+  tau ~ cauchy(0, 5);
+  theta ~ normal(mu, tau);
+  y ~ normal(theta, sigma);
+}</code></pre>
+<div id="centered-eight-schools-model" class="section level2">
+<h2>Centered Eight Schools model</h2>
+<p>We will proceed in the same way as the case of the Cauchy distribution concerning the rank plots, but this time we will focus on the parameter <span class="math inline">\(\tau\)</span>. And our choice is due to the fact that the distribution becomes more centralized on the population mean when faced with the small values of the population standard deviation <span class="math inline">\(\tau\)</span>, which makes it difficult to explore this distribution by MCMC chains.</p>
+<pre class="r"><code>eight_schools &lt;- read_rdump(paste(stan_folder, &quot;eight_schools.data.R&quot;, sep=&quot;&quot;))
+fit_cp &lt;- stan(
+  file = paste(stan_folder, &quot;eight_schools_cp.stan&quot;, sep=&quot;&quot;), data = eight_schools,
+  iter = 2000, chains = 4, seed = 483892929, refresh = 0,
+  control = list(adapt_delta = 0.95)
+)</code></pre>
+<pre><code>Trying to compile a simple C file</code></pre>
+<pre><code>Running /usr/lib/R/bin/R CMD SHLIB foo.c
+gcc -std=gnu99 -std=gnu11 -I&quot;/usr/share/R/include&quot; -DNDEBUG   -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/Rcpp/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/unsupported&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/BH/include&quot; -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/src/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppParallel/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/rstan/include&quot; -DEIGEN_NO_DEBUG  -DBOOST_DISABLE_ASSERTS  -DBOOST_PENDING_INTEGER_LOG2_HPP  -DSTAN_THREADS  -DBOOST_NO_AUTO_PTR  -include &#39;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp&#39;  -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1      -fpic  -g -O2 -fdebug-prefix-map=/build/r-base-J7pprH/r-base-4.1.2=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -g  -c foo.c -o foo.o
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:88:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:1: error: unknown type name ‘namespace’
+ namespace Eigen {
+ ^~~~~~~~~
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:17: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘{’ token
+ namespace Eigen {
+                 ^
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:96:10: fatal error: complex: Aucun fichier ou dossier de ce type
+ #include &lt;complex&gt;
+          ^~~~~~~~~
+compilation terminated.
+/usr/lib/R/etc/Makeconf:168: recipe for target &#39;foo.o&#39; failed
+make: *** [foo.o] Error 1</code></pre>
+<pre class="r"><code>mon &lt;- monitor(fit_cp)
+print(mon)</code></pre>
+<pre><code>Inference for the input samples (4 chains: each with iter = 2000; warmup = 1000):
+
+             Q5    Q50   Q95   Mean   SD  Rhat Bulk_ESS Tail_ESS
+mu        -1.13   4.45 10.52   4.51 3.46  1.01      374      129
+tau        0.56   2.84  9.83   3.69 3.11  1.02      190      162
+theta[1]  -1.53   5.84 16.45   6.33 5.57  1.01      649     1176
+theta[2]  -2.44   4.95 12.91   4.98 4.78  1.01      717     1502
+theta[3]  -4.72   4.38 12.09   4.10 5.37  1.01      668     1477
+theta[4]  -2.42   4.89 12.71   4.90 4.84  1.01      736     1444
+theta[5]  -4.73   3.87 11.26   3.65 4.84  1.01      563      302
+theta[6]  -4.22   4.33 11.96   4.12 5.00  1.01      741      875
+theta[7]  -0.93   6.00 15.79   6.52 5.32  1.01      565     1034
+theta[8]  -3.69   4.83 13.17   4.87 5.34  1.01      740     1438
+lp__     -24.94 -14.89 -3.40 -14.55 6.54  1.02      195      294
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<div id="plot-of-r-hatx-3" class="section level3">
+<h3>Plot of R-hat(x)</h3>
+<pre class="r"><code>chains &lt;- as.array(fit_cp)
+dim_chains &lt;- dim(chains)
+
+simulated_rhat = all_local_rhat(chains[, , &quot;tau&quot;], max_nb_points = &quot;ALL&quot;)
+
+xlabels = c(1, 1.005, 1.01, 1.015, 1.02)
+plot_local_r(chains[, , &quot;tau&quot;], simulated_rhat, xlabels = xlabels,
+             xlim = c(0,30), ylim=c(0.999,1.02), title =&quot;Parameter Tau&quot;)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-15-1.png" width="864" /></p>
+</div>
+<div id="repetitions-comparison-of-different-r-hat-3" class="section level3">
+<h3>Repetitions: comparison of different R-hat</h3>
+<pre class="r"><code>gen_centered_eight_school &lt;- function(){
+  fit_cp &lt;- stan(
+    file = paste(stan_folder, &quot;eight_schools_cp.stan&quot;, sep=&quot;&quot;), data = eight_schools,
+    iter = 2000, chains = 4, refresh = 0,
+    control = list(adapt_delta = 0.95)
+  )
+  mon &lt;- monitor(fit_cp)
+  chains &lt;- as.array(fit_cp)
+
+  return (chains[, , &quot;tau&quot;])
+}
+
+r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[1], colors[2], colors[3])
+
+R_matrix &lt;- repetitions_R(chains_func = gen_centered_eight_school, 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.1, 1.2, 1.3)
+plot_hist(R_matrix, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.01, lim_y_axis = reps)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-16-1.png" width="864" /></p>
+</div>
+</div>
+<div id="non-centered-eight-schools-model" class="section level2">
+<h2>Non-centered Eight Schools model</h2>
+<p>Model :</p>
+<pre class="r"><code>writeLines(readLines(paste(stan_folder, &quot;eight_schools_ncp.stan&quot;, sep=&quot;&quot;)))</code></pre>
+<pre><code>data {
+  int&lt;lower=0&gt; J;
+  real y[J];
+  real&lt;lower=0&gt; sigma[J];
+}
+
+parameters {
+  real mu;
+  real&lt;lower=0&gt; tau;
+  real theta_tilde[J];
+}
+
+transformed parameters {
+  real theta[J];
+  for (j in 1:J)
+    theta[j] = mu + tau * theta_tilde[j];
+}
+
+model {
+  mu ~ normal(0, 5);
+  tau ~ cauchy(0, 5);
+  theta_tilde ~ normal(0, 1);
+  y ~ normal(theta, sigma);
+}</code></pre>
+<pre class="r"><code>fit_ncp2 &lt;- stan(
+  file = paste(stan_folder, &quot;eight_schools_ncp.stan&quot;, sep=&quot;&quot;), data = eight_schools,
+  iter = 2000, chains = 4, seed = 483892929, refresh = 0,
+  control = list(adapt_delta = 0.95)
+)</code></pre>
+<pre><code>Trying to compile a simple C file</code></pre>
+<pre><code>Running /usr/lib/R/bin/R CMD SHLIB foo.c
+gcc -std=gnu99 -std=gnu11 -I&quot;/usr/share/R/include&quot; -DNDEBUG   -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/Rcpp/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/unsupported&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/BH/include&quot; -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/src/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppParallel/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/rstan/include&quot; -DEIGEN_NO_DEBUG  -DBOOST_DISABLE_ASSERTS  -DBOOST_PENDING_INTEGER_LOG2_HPP  -DSTAN_THREADS  -DBOOST_NO_AUTO_PTR  -include &#39;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp&#39;  -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1      -fpic  -g -O2 -fdebug-prefix-map=/build/r-base-J7pprH/r-base-4.1.2=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -g  -c foo.c -o foo.o
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:88:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:1: error: unknown type name ‘namespace’
+ namespace Eigen {
+ ^~~~~~~~~
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:17: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘{’ token
+ namespace Eigen {
+                 ^
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:96:10: fatal error: complex: Aucun fichier ou dossier de ce type
+ #include &lt;complex&gt;
+          ^~~~~~~~~
+compilation terminated.
+/usr/lib/R/etc/Makeconf:168: recipe for target &#39;foo.o&#39; failed
+make: *** [foo.o] Error 1</code></pre>
+<pre class="r"><code>mon &lt;- monitor(fit_ncp2)
+print(mon)</code></pre>
+<pre><code>Inference for the input samples (4 chains: each with iter = 2000; warmup = 1000):
+
+                   Q5   Q50   Q95  Mean   SD  Rhat Bulk_ESS Tail_ESS
+mu              -1.13  4.53  9.85  4.49 3.32     1     5375     3332
+tau              0.26  2.79  9.74  3.56 3.09     1     3281     2729
+theta_tilde[1]  -1.30  0.32  1.87  0.30 0.97     1     5571     3052
+theta_tilde[2]  -1.42  0.08  1.55  0.08 0.90     1     4405     2885
+theta_tilde[3]  -1.69 -0.10  1.45 -0.09 0.96     1     5486     2531
+theta_tilde[4]  -1.52  0.05  1.64  0.05 0.94     1     5183     3102
+theta_tilde[5]  -1.64 -0.16  1.33 -0.16 0.91     1     4884     3289
+theta_tilde[6]  -1.60 -0.07  1.46 -0.07 0.94     1     5584     3087
+theta_tilde[7]  -1.26  0.38  1.91  0.36 0.96     1     4977     3112
+theta_tilde[8]  -1.52  0.07  1.64  0.07 0.96     1     5209     3039
+theta[1]        -1.73  5.67 15.98  6.13 5.53     1     4803     3138
+theta[2]        -2.50  4.87 12.61  4.94 4.56     1     5830     3692
+theta[3]        -4.28  4.21 11.75  4.03 5.08     1     4702     3378
+theta[4]        -2.70  4.80 12.40  4.78 4.75     1     5451     3472
+theta[5]        -3.95  4.02 10.82  3.76 4.62     1     5179     3486
+theta[6]        -4.22  4.31 11.42  4.08 4.93     1     5537     3372
+theta[7]        -1.04  6.01 15.22  6.37 5.07     1     5121     3569
+theta[8]        -3.13  4.90 13.09  4.95 5.19     1     5124     3452
+lp__           -11.02 -6.52 -3.62 -6.83 2.31     1     1850     2629
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<div id="plot-of-r-hatx-4" class="section level3">
+<h3>Plot of R-hat(x)</h3>
+<pre class="r"><code>chains &lt;- as.array(fit_ncp2)
+dim_chains &lt;- dim(chains)
+
+simulated_rhat = all_local_rhat(chains[, , &quot;tau&quot;], max_nb_points = &quot;ALL&quot;)
+
+xlabels = c(1, 1.005, 1.01)
+plot_local_r(chains[, , &quot;tau&quot;], simulated_rhat, xlabels = xlabels,
+             xlim = c(0,20), ylim=c(0.999,1.011), title =&quot;Parameter Tau&quot;)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-19-1.png" width="864" /></p>
+</div>
+<div id="repetitions-comparison-of-different-r-hat-4" class="section level3">
+<h3>Repetitions: comparison of different R-hat</h3>
+<pre class="r"><code>gen_ncp_eight_school &lt;- function(){
+  fit_ncp2 &lt;- stan(
+    file = paste(stan_folder, &quot;eight_schools_ncp.stan&quot;, sep=&quot;&quot;), data = eight_schools,
+    iter = 2000, chains = 4, refresh = 0,
+    control = list(adapt_delta = 0.95)
+  )
+  mon &lt;- monitor(fit_ncp2)
+  chains &lt;- as.array(fit_ncp2)
+
+  return (chains[, , &quot;tau&quot;])
+}
+
+r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[1], colors[2], colors[3])
+
+R_matrix &lt;- repetitions_R(chains_func = gen_ncp_eight_school, 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.01, 1.02, 1.03)
+plot_hist(R_matrix, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.04, lim_y_axis = reps)</code></pre>
+<p><img src="Simulations_empirical_models_files/figure-html/unnamed-chunk-20-1.png" width="864" /></p>
+<!-- ## Time varying distribution -->
+<!-- In this part, we sample independent draws from a standard-normal distribution in order to simulate a very efficient MCMC sampling. We will focus on diagnostics for: -->
+<!-- \begin{itemize} -->
+<!--     \item Adding trend: all chains having a trend and a similar marginal distribution. -->
+<!--     \item Shifting one chain: one of the chains having a different mean. -->
+<!--     \item Scaling one chain: one of the chains having a lower marginal variance. -->
+<!-- \end{itemize} -->
+<!-- In all these cases, we will see how the splitting chain method can help us detecting convergence issues. -->
+<!-- ### Adding the same trend to all chains -->
+<!-- ```{r} -->
+<!-- conds <- expand.grid( -->
+<!--   iters = c(250, 1000, 4000), -->
+<!--   trend = c(0, 0.25, 0.5, 0.75, 1), -->
+<!--   rep = 1:10 -->
+<!-- ) -->
+<!-- res <- vector("list", nrow(conds)) -->
+<!-- chains = 4 -->
+<!-- for (i in 1:nrow(conds)) { -->
+<!--   iters <- conds[i, "iters"] -->
+<!--   trend <- conds[i, "trend"] -->
+<!--   rep <- conds[i, "rep"] -->
+<!--   r <- array(rnorm(iters * chains), c(iters, chains)) -->
+<!--   r <- r + seq(-trend, trend, length.out = iters) -->
+<!--   rs <- as.data.frame(monitor_extra(r)) -->
+<!--   res[[i]] <- cbind(iters, trend, rep, rs) -->
+<!-- } -->
+<!-- res <- bind_rows(res) -->
+<!-- ``` -->
+<!-- In one hand, the first figure shows us that without splitting chains, neither our version nor Rank-$\hat R$ can detect a convergence issue. -->
+<!-- In the other hand, the second one makes it clear that splitting chains is very useful in order to detect trends for both indicators. For our version, by using a threshold of 1.01, we can recognise trends which account for 30\% or more of the total marginal variance. If we use a threshold of 1.1, we detect trends with standard deviation equal or more than the standard deviation of the others. -->
+<!-- ```{r} -->
+<!-- pdf(file = "trend.pdf",  width = 6, height = 4) -->
+<!--   ggplot(data = res, aes(y = Rhat, x = trend)) + -->
+<!--   geom_point(color="red") + -->
+<!--   geom_jitter(color="red") + -->
+<!--   facet_grid(. ~ iters) + -->
+<!--   geom_hline(yintercept = 1.01, linetype = 'dashed') + -->
+<!--   geom_hline(yintercept = 1) + -->
+<!--   geom_point(aes(y = ourRhat), color = "blue" ) + -->
+<!--   geom_jitter(aes(y = ourRhat), color = "blue") -->
+<!--   #ggtitle('Rhat without splitting chains') -->
+<!-- dev.off() -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- pdf(file = "trend2.pdf",  width = 6, height = 4) -->
+<!-- ggplot(data = res, aes(y = zsRhat, x = trend)) + -->
+<!--   geom_point(color="red") + -->
+<!--   geom_jitter(color="red") + -->
+<!--   facet_grid(. ~ iters) + -->
+<!--   geom_hline(yintercept = 1.01, linetype = 'dashed') + -->
+<!--   geom_hline(yintercept = 1) + -->
+<!--   geom_point(aes(y = sOurRhat), color = "blue" ) + -->
+<!--   geom_jitter(aes(y = sOurRhat), color = "blue") -->
+<!--   ggtitle('Split-Rhat') -->
+<!-- dev.off() -->
+<!-- ``` -->
+<!-- ### Shifting one chain -->
+<!-- ```{r} -->
+<!-- conds <- expand.grid( -->
+<!--   iters = c(250, 1000, 4000), -->
+<!--   shift = c(0, 0.25, 0.5, 0.75, 1), -->
+<!--   rep = 1:10 -->
+<!-- ) -->
+<!-- res <- vector("list", nrow(conds)) -->
+<!-- chains = 4 -->
+<!-- for (i in 1:nrow(conds)) { -->
+<!--   iters <- conds[i, "iters"] -->
+<!--   shift <- conds[i, "shift"] -->
+<!--   rep <- conds[i, "rep"] -->
+<!--   r <- array(rnorm(iters * chains), c(iters, chains)) -->
+<!--   r[, 1] <- r[, 1] + shift -->
+<!--   rs <- as.data.frame(monitor_extra(r)) -->
+<!--   res[[i]] <- cbind(iters, shift, rep, rs) -->
+<!-- } -->
+<!-- res <- bind_rows(res) -->
+<!-- dim(r) -->
+<!-- ``` -->
+<!-- This figure shows that splitting chains is very useful in order to detect shifting for both indicators. For our version, using a threshold of 1.01 we can recognise trends which account for shifts with a magnitude of one third or more of the marginal standard deviation. If we use a threshold of 1.1, we detect shifts with a magnitude equal to or larger than the marginal standard deviation. -->
+<!-- ```{r} -->
+<!-- pdf(file = "shift.pdf",  width = 6, height = 4) -->
+<!-- ggplot(data = res, aes(y = zsRhat, x = shift)) + -->
+<!--   geom_point(color="red") + -->
+<!--   geom_jitter(color="red") + -->
+<!--   facet_grid(. ~ iters) + -->
+<!--   geom_hline(yintercept = 1.01, linetype = 'dashed') + -->
+<!--   geom_hline(yintercept = 1) + -->
+<!--   geom_point(data = res, aes(y = sOurRhat, x = shift, color = "Our split Rhat"), color = "blue") + -->
+<!--   geom_jitter(data = res, aes(y = sOurRhat, x = shift, color = "Our split Rhat"), color = "blue") -->
+<!--   ggtitle('Split-Rhat') -->
+<!-- dev.off() -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- iters = 250 -->
+<!-- chains = 4 -->
+<!-- shift = 0.5 -->
+<!-- r <- array(rnorm(iters * chains), c(iters, chains)) -->
+<!-- r[, 1] <- r[, 1] + shift -->
+<!-- colnames(r) <- 1:4 -->
+<!-- mcmc_hist_r_scale(r) -->
+<!-- ``` -->
+<!-- ### Scaling one chain -->
+<!-- ```{r} -->
+<!-- conds <- expand.grid( -->
+<!--   iters = c(250, 1000, 4000), -->
+<!--   scale = c(0, 0.25, 0.5, 0.75, 1), -->
+<!--   rep = 1:10 -->
+<!-- ) -->
+<!-- res <- vector("list", nrow(conds)) -->
+<!-- chains = 4 -->
+<!-- for (i in 1:nrow(conds)) { -->
+<!--   iters <- conds[i, "iters"] -->
+<!--   scale <- conds[i, "scale"] -->
+<!--   rep <- conds[i, "rep"] -->
+<!--   r <- array(rnorm(iters * chains), c(iters, chains)) -->
+<!--   r[, 1] <- r[, 1] * scale -->
+<!--   rs <- as.data.frame(monitor_extra(r)) -->
+<!--   res[[i]] <- cbind(iters, scale, rep, rs) -->
+<!-- } -->
+<!-- res <- bind_rows(res) -->
+<!-- ``` -->
+<!-- With splitting chains, our version manages to detect a scaling issue while the Split-$\hat R$ did not. If we use a threshold of 1.01, we can detect a chain with scale less than 3/5 of the standard deviation of the others. If we use threshold of 1.1, we detect a chain with standard deviation less than 1/5 of the standard deviation of the others. -->
+<!-- ```{r} -->
+<!-- pdf(file = "scale.pdf",  width = 6, height = 4) -->
+<!-- ggplot(data = res, aes(y = zsRhat, x = scale)) + -->
+<!--   geom_point(color="red") + -->
+<!--   geom_jitter(color="red") + -->
+<!--   facet_grid(. ~ iters) + -->
+<!--   geom_hline(yintercept = 1.01, linetype = 'dashed') + -->
+<!--   geom_hline(yintercept = 1) + -->
+<!--   geom_point(data = res, aes(y = sOurRhat, x = scale, color = "Our split Rhat"), color="blue") + -->
+<!--   geom_jitter(data = res, aes(y = sOurRhat, x = scale, color = "Our split Rhat"), color="blue") -->
+<!--   ggtitle('Split-Rhat') -->
+<!--   dev.off() -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!--  ggplot(data = res, aes(y = zfsRhat, x = scale)) + -->
+<!--    geom_point() + -->
+<!--    geom_jitter() + -->
+<!--    facet_grid(. ~ iters) + -->
+<!--    geom_hline(yintercept = 1.01, linetype = 'dashed') + -->
+<!--    geom_hline(yintercept = 1) + -->
+<!--    ggtitle('Split-Rhat') -->
+<!-- ``` -->
+<!-- ```{r} -->
+<!-- iters = 250 -->
+<!-- chains = 4 -->
+<!-- scale = 0.75 -->
+<!-- r <- array(rnorm(iters * chains), c(iters, chains)) -->
+<!-- r[, 1] <- r[, 1] * scale -->
+<!-- colnames(r) <- 1:4 -->
+<!-- mcmc_hist_r_scale(r) -->
+<!-- ``` -->
+</div>
+</div>
+</div>
+<div id="conclusion" class="section level1">
+<h1>Conclusion</h1>
+<table>
+<colgroup>
+<col width="29%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="right"></th>
+<th align="center"><span class="math inline">\(\hat{R}\)</span></th>
+<th align="center">rank <span class="math inline">\(\hat{R}\)</span></th>
+<th align="center"><span class="math inline">\(R^*\)</span></th>
+<th align="center"><span class="math inline">\(\hat{R}_\infty\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="right"><strong>Known distributions</strong></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+</tr>
+<tr class="even">
+<td align="right">Uniform with a shift</td>
+<td align="center">0.9999314 <span class="math inline">\(\in\)</span> [0.9991007; 1.00121]</td>
+<td align="center">1.107251 <span class="math inline">\(\in\)</span> [1.085123; 1.125023]</td>
+<td align="center">1.4776 <span class="math inline">\(\in\)</span> [1.278667; 1.695333]</td>
+<td align="center">1.124144 <span class="math inline">\(\in\)</span> [1.10777; 1.140794]</td>
+</tr>
+<tr class="odd">
+<td align="right">Pareto with a shift</td>
+<td align="center">0.9998791 <span class="math inline">\(\in\)</span> [0.9990715; 1.001303]</td>
+<td align="center">1.195144 <span class="math inline">\(\in\)</span> [1.173378; 1.214119]</td>
+<td align="center">1.699333 <span class="math inline">\(\in\)</span> [1.479333; 1.893333]</td>
+<td align="center">1.325333 <span class="math inline">\(\in\)</span> [1.299576; 1.353226]</td>
+</tr>
+<tr class="even">
+<td align="right">One uniform and one Normal</td>
+<td align="center">0.9998857 <span class="math inline">\(\in\)</span> [0.9990033; 1.002036]</td>
+<td align="center">1.001107 <span class="math inline">\(\in\)</span> [0.9986352; 1.004096]</td>
+<td align="center">1.126133 <span class="math inline">\(\in\)</span> [0.9733333; 1.334]</td>
+<td align="center">1.015284 <span class="math inline">\(\in\)</span> [1.011981; 1.018712]</td>
+</tr>
+<tr class="odd">
+<td align="right">One uniform and one Laplace</td>
+<td align="center">0.9999491 <span class="math inline">\(\in\)</span> [0.9990011; 1.002565]</td>
+<td align="center">1.003347 <span class="math inline">\(\in\)</span> [0.9997799; 1.009437]</td>
+<td align="center">1.0504 <span class="math inline">\(\in\)</span> [0.88; 1.240667]</td>
+<td align="center">1.020009 <span class="math inline">\(\in\)</span> [1.015866; 1.02451]</td>
+</tr>
+<tr class="even">
+<td align="right">One uniform and one exponential</td>
+<td align="center">0.9998548 <span class="math inline">\(\in\)</span> [0.9991057; 1.001636]</td>
+<td align="center">1.006294 <span class="math inline">\(\in\)</span> [1.003791; 1.009786]</td>
+<td align="center">1.237333 <span class="math inline">\(\in\)</span> [1.052667; 1.454]</td>
+<td align="center">1.021054 <span class="math inline">\(\in\)</span> [1.018515; 1.024198]</td>
+</tr>
+<tr class="odd">
+<td align="right">Normal with different scale</td>
+<td align="center">0.999885 <span class="math inline">\(\in\)</span> [0.9990003; 1.002881]</td>
+<td align="center">1.091999 <span class="math inline">\(\in\)</span> [1.065948; 1.114537]</td>
+<td align="center">0.956 <span class="math inline">\(\in\)</span> [0.7993333; 1.120667]</td>
+<td align="center">1.036229 <span class="math inline">\(\in\)</span> [1.028424; 1.046363]</td>
+</tr>
+<tr class="even">
+<td align="right"><strong>Empirical models</strong></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+<td align="center"></td>
+</tr>
+<tr class="odd">
+<td align="right">Autoregressive</td>
+<td align="center">1.000972 <span class="math inline">\(\in\)</span> [0.9991403; 1.004952]</td>
+<td align="center">1.113738 <span class="math inline">\(\in\)</span> [1.100181; 1.12713]</td>
+<td align="center">1.425733 <span class="math inline">\(\in\)</span> [1.252; 1.600667]</td>
+<td align="center">1.036027 <span class="math inline">\(\in\)</span> [1.0313; 1.041732]</td>
+</tr>
+<tr class="even">
+<td align="right">Cauchy (nominal parameterisation)</td>
+<td align="center">1.068062 <span class="math inline">\(\in\)</span> [1.02489; 1.142578]</td>
+<td align="center">1.053728 <span class="math inline">\(\in\)</span> [1.024429; 1.114058]</td>
+<td align="center">1.488 <span class="math inline">\(\in\)</span> [1.349667; 1.688333]</td>
+<td align="center">1.042343 <span class="math inline">\(\in\)</span> [1.013379; 1.101661]</td>
+</tr>
+<tr class="odd">
+<td align="right">Cauchy (alterntive parameterisation)</td>
+<td align="center">1.001634 <span class="math inline">\(\in\)</span> [1.000983; 1.002834]</td>
+<td align="center">1.004488 <span class="math inline">\(\in\)</span> [1.003253; 1.005964]</td>
+<td align="center">1.173333 <span class="math inline">\(\in\)</span> [1.129; 1.203667]</td>
+<td align="center">1.00345 <span class="math inline">\(\in\)</span> [1.002424; 1.005111]</td>
+</tr>
+<tr class="even">
+<td align="right">Eight schools model (centered)</td>
+<td align="center">1.011951 <span class="math inline">\(\in\)</span> [1.001895; 1.032528]</td>
+<td align="center">1.036036 <span class="math inline">\(\in\)</span> [1.009328; 1.097528]</td>
+<td align="center">1.315333 <span class="math inline">\(\in\)</span> [1.069667; 1.598]</td>
+<td align="center">1.046005 <span class="math inline">\(\in\)</span> [1.0065; 1.135867]</td>
+</tr>
+<tr class="odd">
+<td align="right">Eight schools model (non-centered)</td>
+<td align="center">1.00 <span class="math inline">\(\in\)</span> [0.9995478; 1.000908]</td>
+<td align="center">1.000754 <span class="math inline">\(\in\)</span> [0.9999021; 1.001654]</td>
+<td align="center">0.878 <span class="math inline">\(\in\)</span> [0.7886667; 0.9503333]</td>
+<td align="center">1.001029 <span class="math inline">\(\in\)</span> [1.000256; 1.002716]</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

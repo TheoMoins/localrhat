@@ -1,0 +1,576 @@
+---
+title: "Improving MCMC convergence diagnostic with a local version of R-hat: Empirical models"
+author: "Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy"
+date: "6/18/2021"
+output: 
+  html_document: 
+    self_contained: no
+    toc: yes
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  comment = NA, 
+  cache = FALSE,
+  fig.width = 14,
+  message = FALSE,
+  dev = c("png", "pdf")
+)
+options(width = 100)
+
+# Working directory : localrhat
+stan_folder <- "./stan_files/"
+r_folder <- "../R/"
+```
+
+
+```{r, comment=NA, message=FALSE, warning=FALSE, results='hide', cache=FALSE}
+library("EnvStats")
+library('jmuOutlier')
+library("ggplot2")
+library("rstan")
+
+source(paste(r_folder, "import/monitornew.R", sep=""))
+source(paste(r_folder, "import/r_star_monitor.R", sep=""))
+
+devtools::load_all()
+
+N <- 500
+reps <- 50
+```
+
+
+```{r, include=FALSE}
+r_star_gbm <- function(chaines){
+  dim_chaines <- dim(chaines)
+  R_star_chains <- array(dim = c(dim_chaines[1], dim_chaines[2], 1))
+  R_star_chains[,,1] <- chaines
+  return (r_star(R_star_chains, method = "gbm"))
+}
+
+
+repetitions_R <- function(chains_func, r_func, r_names, 
+                          reps=100, saved_model=FALSE){
+  ncolumn <- length(r_func)
+  R_values <- c()
+  for (f in r_func){
+    vect <- c()
+    for (e in 1:reps){
+      if (saved_model){
+        chaines <- chains_func(e)
+      } else {
+        chaines <- chains_func() 
+      }
+      vect <- c(vect, f(chaines))
+    }
+    R_values = c(R_values, vect)
+  }
+  M <- matrix(data = R_values, ncol = ncolumn)
+  colnames(M) <- r_names
+  return (M)
+}
+
+colors <- c(rgb(0.1,0.6,0.1,0.7), rgb(0.1,0.1,0.7,0.7), rgb(0.5, 0, 0.5, 0.8), rgb(0.8, 0.1, 0.1, 0.8), rgb(1,0.6,0,0.8))
+
+r_version <- c()
+r_experiment <- c()
+r_values <- c()
+
+```
+
+# Experiments when the population value is unknown
+
+## Autoregressive model
+
+
+```{r}
+autoregressive <- function(n, rho, sigma){
+  chain <- c()
+  pre <- 0
+  eps <- rnorm(n, 0, sigma)
+  for (t in 1:n){
+    suiv <- rho*pre+eps[t]
+    chain <- c(chain, suiv)
+    pre <- suiv
+  }
+  return(chain)
+}
+
+gen_autoreg_chains <- function(M, N, rho, sigma, sigmaM){
+  return (array(c(replicate(M-1, autoregressive(N, rho, sigma)), 
+                  autoregressive(N, rho, sigmaM)), c(N,M)))
+}
+
+```
+
+## Plot of R-hat(x)
+
+```{r}
+
+M <- 4
+sigma <- 1
+sigmaM <- 2
+rho <- 1/2
+
+
+chaines = gen_autoreg_chains(M, N, rho, sigma, sigmaM)
+simulated_rhat = all_local_rhat(chaines, max_nb_points = "ALL")
+
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/autoreg.pdf", width = 12, height = 7)
+plot_local_r(chaines, simulated_rhat, col=c(colors[3], colors[2]),
+             xlim = c(-6,6), ylim=c(1,1.07), title ="")
+# dev.off()
+```
+
+## Repetitions: comparison of different R-hat
+
+```{r uniform_hist, warning=FALSE}
+
+r_functions <- c(trad_rhat, rhat, rhat_infinity)
+r_names <- c("R-hat", "Rank-R-hat", "R-hat-infinity")
+r_colors <- c(colors[4], colors[5], colors[3])
+
+R_matrix_autoreg <- repetitions_R(
+  chains_func = (function() gen_autoreg_chains(M, N, rho, sigma, sigmaM)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_autoreg.pdf", width = 12, height = 7)
+plot_hist(R_matrix_autoreg, colors = r_colors, 
+          xlabels = c(1, 1.02, 1.04, 1.06, 1.08, 1.1),
+          bin_size = 0.004, lim_y_axis = 80)
+# dev.off()
+```
+
+```{r, include=FALSE}
+r_version <- c(r_version, 
+               rep(colnames(R_matrix_autoreg)[1], dim(R_matrix_autoreg)[1]),
+               rep(colnames(R_matrix_autoreg)[2], dim(R_matrix_autoreg)[1]),
+               rep(colnames(R_matrix_autoreg)[3], dim(R_matrix_autoreg)[1]))
+r_experiment <- c(r_experiment, rep("1.Autoregressive", length(R_matrix_autoreg)))
+r_values <- c(r_values, as.vector(R_matrix_autoreg))
+```
+
+
+# Cauchy
+
+In this section, we will study two parameterization of Cauchy using HMC:
+- Nominal parameterization which is a direct one.
+- Alternative parameterization which is a scale mixture of Gaussians.
+
+To study these two parametrizations we will use rank plots which illustrate a mixing problem if they are not uniform. First we will look for an element of the vector for which our $\hat R$ is one of the highest. Here we want rather to study the tail of the distribution than the bulk because of the thick tail of the Cauchy distribution. Finally, we will use the rank plots of this element found to know if we have a mixing problem or not.
+
+
+## Nominal parameterization
+
+Model :
+
+```{r}
+writeLines(readLines(paste(stan_folder, "cauchy_nom.stan", sep="")))
+```
+
+
+```{r, warning=FALSE}
+# fit_nom <- stan(file = paste(stan_folder, "cauchy_nom.stan", sep=""), seed = 7878, refresh = 0)
+# saveRDS(fit_nom, paste(stan_folder, "cauchy_nom.rds", sep=""))
+fit_nom <- readRDS(paste(stan_folder, "cauchy_fits/cauchy_nom.rds", sep=""))
+
+mon <- monitor(fit_nom)
+
+which_max_rhat <- which.max(mon[1:50, 'Rhat'])
+max_rhat <- max(mon[1:50, 'Rhat'])
+
+subset(mon, Rhat == max_rhat)
+```
+### Plot of R-hat(x)
+
+```{r, warning=FALSE}
+chains <- as.array(fit_nom)
+dim_chains <- dim(chains)
+
+rhat_inf <- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i <- chains[, , i]
+  rhat_inf_i <- rhat_infinity(chains_i)
+  rhat_inf <- c(rhat_inf, rhat_inf_i)
+}
+
+mon[["Rhat_inf"]] <- rhat_inf
+which_max_rhat_inf <- which.max(mon[1:50, 'Rhat_inf'])
+  
+simulated_rhat = all_local_rhat(chains[ , , which_max_rhat_inf], max_nb_points = "ALL")
+
+xlabels = 1:10
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/cauchy.pdf", width = 12, height = 7)
+plot_local_r(chains[ , , which_max_rhat_inf], simulated_rhat,
+             col=c(colors[3], colors[2]), xlabels = xlabels,
+             xlim = c(-50,200), ylim=c(1,10), title ="")
+# dev.off()
+```
+
+
+### Repetitions: comparison of different R-hat
+
+
+```{r, warning=FALSE}
+
+gen_diverging_cauchy <- function(i){
+  fit_nom <- stan(file = paste(stan_folder, "cauchy_nom.stan", sep=""), refresh = 0)
+  saveRDS(fit_nom, paste(stan_folder, "cauchy_fits/cauchy_nom_", i, ".rds", sep=""))
+  # fit_nom <- readRDS(paste(stan_folder, "cauchy_fits/cauchy_nom_", i, ".rds", sep=""))
+  
+  
+  mon <- monitor(fit_nom)
+  chains <- as.array(fit_nom)
+  dim_chains <- dim(chains)
+  
+  rhat_inf <- c()
+  
+  for (i in 1:dim_chains[3]) {
+    chains_i <- chains[, , i]
+    rhat_inf_i <- rhat_infinity(chains_i)
+    rhat_inf <- c(rhat_inf, rhat_inf_i)
+  }
+  mon[["Rhat_inf"]] <- rhat_inf
+  which_max_rhat_inf <- which.max(mon[1:50, 'Rhat_inf'])
+  
+  return (chains[, , which_max_rhat_inf])
+}
+
+r_functions <- c(trad_rhat, rhat, rhat_infinity)
+r_names <- c("R-hat", "Rank-R-hat", "R-hat-infinity")
+r_colors <- c(colors[4], colors[5], colors[3])
+
+R_matrix_cauchy <- repetitions_R(chains_func = gen_diverging_cauchy, 
+                                 r_func = r_functions, 
+                                 r_names = r_names, 
+                                 reps = reps, saved_model = TRUE)
+
+xlabels = c(1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_cauchy.pdf", width = 12, height = 7)
+plot_hist(R_matrix_cauchy, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.02, lim_y_axis = reps/2)
+# dev.off()
+```
+
+
+```{r, include=FALSE}
+r_version <- c(r_version, 
+               rep(colnames(R_matrix_cauchy)[1], dim(R_matrix_cauchy)[1]),
+               rep(colnames(R_matrix_cauchy)[2], dim(R_matrix_cauchy)[1]),
+               rep(colnames(R_matrix_cauchy)[3], dim(R_matrix_cauchy)[1]))
+r_experiment <- c(r_experiment, rep("2.Cauchy", length(R_matrix_cauchy)))
+r_values <- c(r_values, as.vector(R_matrix_cauchy))
+```
+
+
+## Alternative parameterization
+
+Model :
+
+```{r}
+writeLines(readLines(paste(stan_folder, "cauchy_alt_1.stan", sep="")))
+```
+
+```{r, warning=FALSE}
+fit_alt1 <- stan(file = paste(stan_folder, "cauchy_alt_1.stan", sep=""), seed = 7878, refresh = 0)
+saveRDS(fit_alt1, paste(stan_folder, "cauchy_fits/cauchy_alt.rds", sep=""))
+# fit_alt1 <- readRDS(paste(stan_folder, "cauchy_fits/cauchy_alt.rds", sep=""))
+mon <- monitor(fit_alt1)
+
+
+which_max_rhat <- which.max(mon[101:150, 'Rhat'])
+max_rhat <- max(mon[101:150, 'Rhat'])
+subset(mon, Rhat == max_rhat)
+
+```
+
+### Plot of R-hat(x)
+
+```{r, warning=FALSE}
+chains <- as.array(fit_alt1)
+dim_chains <- dim(chains)
+
+rhat_inf <- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i <- chains[, , i]
+  rhat_inf_i <- rhat_infinity(chains_i)
+  rhat_inf <- c(rhat_inf, rhat_inf_i)
+}
+
+mon[["Rhat_inf"]] <- rhat_inf
+which_max_rhat_inf <- which.max(mon[101:150, 'Rhat_inf'])
+  
+simulated_rhat = all_local_rhat(chains[ , , which_max_rhat_inf], max_nb_points = "ALL")
+
+xlabels = c(1, 1.005, 1.01)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/cauchy_alt.pdf", width = 12, height = 7)
+plot_local_r(chains[, , which_max_rhat], simulated_rhat, 
+             col=c(colors[3], colors[2]), xlabels = xlabels,
+             xlim = c(-4,4), ylim=c(0.9995,1.012), title ="")
+# dev.off()
+```
+
+### Repetitions: comparison of different R-hat
+
+
+```{r, warning=FALSE}
+
+gen_converging_cauchy <- function(i){
+  fit_nom <- stan(file = paste(stan_folder, "cauchy_alt_1.stan", sep=""), refresh = 0)
+  saveRDS(fit_alt1, paste(stan_folder, "cauchy_fits/cauchy_alt_", i, ".rds", sep=""))
+  # fit_alt1 <- readRDS(paste(stan_folder, "cauchy_fits/cauchy_alt_", i, ".rds", sep=""))
+  
+  mon <- monitor(fit_nom)
+  chains <- as.array(fit_nom)
+  dim_chains <- dim(chains)
+  
+  rhat_inf <- c()
+  
+  for (i in 1:dim_chains[3]) {
+    chains_i <- chains[, , i]
+    rhat_inf_i <- rhat_infinity(chains_i)
+    rhat_inf <- c(rhat_inf, rhat_inf_i)
+  }
+  mon[["Rhat_inf"]] <- rhat_inf
+  which_max_rhat_inf <- which.max(mon[101:150, 'Rhat_inf'])
+  
+  return (chains[, , which_max_rhat_inf])
+}
+
+r_functions <- c(trad_rhat, rhat, rhat_infinity)
+r_names <- c("R-hat", "Rank-R-hat", "R-hat-infinity")
+r_colors <- c(colors[4], colors[5], colors[3])
+
+R_matrix_cauchy2 <- repetitions_R(chains_func = gen_converging_cauchy, 
+                                  r_func = r_functions, 
+                                  r_names = r_names, 
+                                  reps = reps,
+                                  saved_model = TRUE)
+
+xlabels = c(1, 1.005, 1.01, 1.015, 1.02, 1.025, 1.03)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_cauchy_alt.pdf", width = 12, height = 7)
+plot_hist(R_matrix_cauchy2, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.0007, lim_y_axis = reps)
+# dev.off()
+```
+
+```{r, include=FALSE}
+r_version <- c(r_version, 
+               rep(colnames(R_matrix_cauchy2)[1], dim(R_matrix_cauchy2)[1]),
+               rep(colnames(R_matrix_cauchy2)[2], dim(R_matrix_cauchy2)[1]),
+               rep(colnames(R_matrix_cauchy2)[3], dim(R_matrix_cauchy2)[1]))
+r_experiment <- c(r_experiment, rep("3.Cauchy2", length(R_matrix_cauchy2)))
+r_values <- c(r_values, as.vector(R_matrix_cauchy2))
+```
+
+# Hierarchical model: Eight Schools
+
+Model :
+
+```{r}
+writeLines(readLines(paste(stan_folder, "eight_schools_cp.stan", sep="")))
+```
+
+## Centered Eight Schools model
+
+We will proceed in the same way as the case of the Cauchy distribution concerning the rank plots, but this time we will focus on the parameter $\tau$. And our choice is due to the fact that the distribution becomes more centralized on the population mean when faced with the small values of the population standard deviation $\tau$, which makes it difficult to explore this distribution by MCMC chains.
+
+```{r, warning=FALSE}
+eight_schools <- read_rdump(paste(stan_folder, "eight_schools.data.R", sep=""))
+fit_cp <- stan(
+  file = paste(stan_folder, "eight_schools_cp.stan", sep=""), data = eight_schools,
+  iter = 2000, chains = 4, seed = 120, refresh = 0,
+  control = list(adapt_delta = 0.95)
+)
+saveRDS(fit_cp, paste(stan_folder, "eight_schools_fits/eight_schools_cp.rds", sep=""))
+# fit_cp <- readRDS(paste(stan_folder, "eight_schools_fits/eight_schools_cp.rds", sep=""))
+
+mon <- monitor(fit_cp)
+print(mon)
+```
+### Plot of R-hat(x)
+
+```{r, warning=FALSE}
+chains <- as.array(fit_cp)
+dim_chains <- dim(chains)
+
+simulated_rhat = all_local_rhat(chains[, , "tau"], max_nb_points = "ALL")
+
+xlabels = c(1, 1.01, 1.02, 1.03, 1.04)
+
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/tau_cp.pdf", width = 12, height = 7)
+plot_local_r(chains[, , "tau"], simulated_rhat, 
+             col=c(colors[3], colors[2]), xlabels = xlabels,
+             xlim = c(0,25), ylim=c(0.999,1.04), title ="")
+# dev.off()
+```
+
+### Repetitions: comparison of different R-hat
+
+
+```{r, warning=FALSE}
+
+gen_centered_eight_school <- function(i){
+  fit_cp <- stan(
+    file = paste(stan_folder, "eight_schools_cp.stan", sep=""), data = eight_schools,
+    iter = 2000, chains = 4, refresh = 0,
+    control = list(adapt_delta = 0.95)
+  )
+  saveRDS(fit_cp, paste(stan_folder, "eight_schools_fits/eight_schools_cp_", i, ".rds", sep=""))
+  # fit_cp <- readRDS(paste(stan_folder, "eight_schools_fits/eight_schools_cp_", i, ".rds", sep=""))
+  
+  mon <- monitor(fit_cp)
+  chains <- as.array(fit_cp)
+
+  return (chains[, , "tau"])
+}
+
+r_functions <- c(trad_rhat, rhat, rhat_infinity)
+r_names <- c("R-hat", "Rank-R-hat", "R-hat-infinity")
+r_colors <- c(colors[4], colors[5], colors[3])
+
+R_matrix_8schools <- repetitions_R(chains_func = gen_centered_eight_school, 
+                                   r_func = r_functions, 
+                                   r_names = r_names, 
+                                   reps = reps)
+
+xlabels = c(1, 1.02, 1.04, 1.06, 1.08, 1.1, 1.12, 1.14)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_tau_cp.pdf", width = 12, height = 7)
+plot_hist(R_matrix_8schools, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.005, lim_y_axis = 25)
+# dev.off()
+```
+```{r, include=FALSE}
+r_version <- c(r_version, 
+               rep(colnames(R_matrix_8schools)[1], dim(R_matrix_8schools)[1]),
+               rep(colnames(R_matrix_8schools)[2], dim(R_matrix_8schools)[1]),
+               rep(colnames(R_matrix_8schools)[3], dim(R_matrix_8schools)[1]))
+r_experiment <- c(r_experiment, rep("4.8Schools", length(R_matrix_8schools)))
+r_values <- c(r_values, as.vector(R_matrix_8schools))
+```
+
+### Multivariate version on the likelihood
+
+```{r, warning=FALSE}
+chains <- as.array(fit_cp)
+dim_chains <- dim(chains)
+
+simulated_rhat = all_local_rhat(chains[, , "lp__"], max_nb_points = "ALL")
+
+# xlabels = c(1, 1.005, 1.01, 1.015, 1.02)
+plot_local_r(chains[, , "lp__"], simulated_rhat, 
+             col=c(colors[3], colors[2])
+             xlim = c(-7,7), ylim=c(0.999,1.02), title ="Likelihood")
+```
+
+
+## Non-centered Eight Schools model
+
+Model :
+
+```{r}
+writeLines(readLines(paste(stan_folder, "eight_schools_ncp.stan", sep="")))
+```
+
+```{r, warning=FALSE}
+fit_ncp2 <- stan(
+  file = paste(stan_folder, "eight_schools_ncp.stan", sep=""), data = eight_schools,
+  iter = 2000, chains = 4, seed = 483892929, refresh = 0,
+  control = list(adapt_delta = 0.95)
+)
+saveRDS(fit_ncp2, paste(stan_folder, "eight_schools_fits/eight_schools_ncp.rds", sep=""))
+# fit_ncp2 <- readRDS(paste(stan_folder, "eight_schools_fits/eight_schools_ncp.rds", sep=""))
+
+
+mon <- monitor(fit_ncp2)
+print(mon)
+```
+
+### Plot of R-hat(x)
+
+```{r, warning=FALSE}
+chains <- as.array(fit_ncp2)
+dim_chains <- dim(chains)
+
+simulated_rhat = all_local_rhat(chains[, , "tau"], max_nb_points = "ALL")
+
+xlabels = c(1, 1.005, 1.01)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/tau_ncp.pdf", width = 12, height = 7)
+plot_local_r(chains[, , "tau"], simulated_rhat, 
+             col=c(colors[3], colors[2]), xlabels = xlabels,
+             xlim = c(0,25), ylim=c(0.999,1.011), title ="")
+# dev.off()
+```
+
+### Repetitions: comparison of different R-hat
+
+```{r, warning=FALSE}
+
+gen_ncp_eight_school <- function(i){
+  fit_ncp2 <- stan(
+    file = paste(stan_folder, "eight_schools_ncp.stan", sep=""), data = eight_schools,
+    iter = 2000, chains = 4, refresh = 0,
+    control = list(adapt_delta = 0.95)
+  )
+  saveRDS(fit_ncp2, paste(stan_folder, "eight_schools_fits/eight_schools_ncp_", i, ".rds", sep=""))
+  # fit_ncp2 <- readRDS(paste(stan_folder, "eight_schools_fits/eight_schools_ncp_", i, ".rds", sep=""))
+  mon <- monitor(fit_ncp2)
+  chains <- as.array(fit_ncp2)
+
+  return (chains[, , "tau"])
+}
+
+r_functions <- c(trad_rhat, rhat, rhat_infinity)
+r_names <- c("R-hat", "Rank-R-hat", "R-hat-infinity")
+r_colors <- c(colors[4], colors[5], colors[3])
+
+R_matrix_8schools2 <- repetitions_R(chains_func = gen_ncp_eight_school, 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps,
+                         saved_model = TRUE)
+
+xlabels = c(1, 1.005, 1.01, 1.015, 1.02)
+# pdf(file = "/scratch/tmoins/Documents/Code_rhat/figure_article/hist_tau_ncp.pdf", width = 12, height = 7)
+plot_hist(R_matrix_8schools2, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.0007, lim_y_axis = reps)
+# dev.off()
+```
+```{r, include=FALSE}
+r_version <- c(r_version, 
+               rep(colnames(R_matrix_8schools2)[1], dim(R_matrix_8schools2)[1]),
+               rep(colnames(R_matrix_8schools2)[2], dim(R_matrix_8schools2)[1]),
+               rep(colnames(R_matrix_8schools2)[3], dim(R_matrix_8schools2)[1]))
+r_experiment <- c(r_experiment, rep("5.8Schools2", length(R_matrix_8schools2)))
+r_values <- c(r_values, as.vector(R_matrix_8schools2))
+```
+
+### Multivariate version on the likelihood
+
+```{r, warning=FALSE}
+chains <- as.array(fit_ncp2)
+dim_chains <- dim(chains)
+
+simulated_rhat = all_local_rhat(chains[, , "lp__"], max_nb_points = "ALL")
+
+xlabels = c(1, 1.005, 1.01, 1.015, 1.02)
+plot_local_r(chains[, , "lp__"], simulated_rhat, xlabels = xlabels,
+             xlim = c(-7,0), ylim=c(0.999,1.02), title ="Likelihood")
+```
+
+```{r}
+data=data.frame(r_version, r_experiment,  r_values)
+
+ggplot(data, aes(x=r_experiment, y=r_values, fill=r_version)) +
+    geom_boxplot() + 
+    geom_hline(yintercept=1.01, linetype="dashed", 
+               color = "black", size=0.5) +
+    xlab("Experiments") + ylab("Values") + ylim(1, 1.3)
+```
+

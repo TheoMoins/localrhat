@@ -1,0 +1,4 @@
+import(MASS)
+
+importFrom("grDevices", "rgb")
+importFrom("graphics", "abline", "axis", "hist", "legend", "lines")

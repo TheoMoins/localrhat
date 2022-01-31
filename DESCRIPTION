@@ -1,0 +1,17 @@
+Package: localrhat
+Type: Package
+Title: A Local Version of R-hat For MCMC Convergence Diagnostic 
+Version: 0.1.0
+Authors@R: c(person("Théo", "Moins", role = c("aut", "cre"), email = "theo.moins@inria.fr"), 
+             person("Julyan", "Arbel", role = c("aut"), email = "julyan.arbel@inria.fr"),
+             person("Stéphane", "Girard", role = c("aut"), email = "stephane.girard@inria.fr"),
+             person("Anne", "Dutfoy", role = c("aut"), email = "anne.dutfoy@edf.fr"))
+Maintainer: Théo Moins <theo.moins@inria.fr>
+Description: Implementation of a modified version of the Gelman-Rubin diagnostic for
+             MCMC convergence diagnostic (also known as R-hat), where it is 
+             computed on local indicator variables and the supremum over all 
+             quantile is consider.
+Depends: R (>= 4.1), MASS
+License: What license is it under?
+Encoding: UTF-8
+RoxygenNote: 7.1.2

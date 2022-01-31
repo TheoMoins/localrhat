@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy" />
+
+
+<title>Improving MCMC convergence diagnostic with a local version of R-hat: Multivariate simulations</title>
+
+<script src="Simulations_multivariate_files/header-attrs-2.11/header-attrs.js"></script>
+<script src="Simulations_multivariate_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="Simulations_multivariate_files/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="Simulations_multivariate_files/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="Simulations_multivariate_files/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="Simulations_multivariate_files/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="Simulations_multivariate_files/navigation-1.1/tabsets.js"></script>
+<link href="Simulations_multivariate_files/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="Simulations_multivariate_files/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Improving MCMC convergence diagnostic with a local version of R-hat: Multivariate simulations</h1>
+<h4 class="author">Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy</h4>
+<h4 class="date">6/18/2021</h4>
+
+</div>
+
+<div id="TOC">
+<ul>
+<li><a href="#multivariate-examples">Multivariate examples</a>
+<ul>
+<li><a href="#bivariate-case-normal-distributions">Bivariate Case: Normal distributions</a>
+<ul>
+<li><a href="#evolution-of-the-different-value-of-hatr-with-rho">Evolution of the different value of <span class="math inline">\(\hat{R}\)</span> with <span class="math inline">\(\rho\)</span></a></li>
+</ul></li>
+<li><a href="#general-number-of-dimensions">General number of dimensions</a>
+<ul>
+<li><a href="#generation-of-a-covariance-matrix">Generation of a covariance matrix</a></li>
+</ul></li>
+<li><a href="#logistic-regression">Logistic regression</a></li>
+</ul></li>
+<li><a href="#wide-multivariate-normal">Wide multivariate normal</a></li>
+</ul>
+</div>
+
+<pre class="r"><code>library(&quot;EnvStats&quot;)
+library(&#39;jmuOutlier&#39;)
+library(&quot;rstan&quot;)
+library(&quot;MASS&quot;) # For Multivariate Normal Distribution
+library(&quot;stableGR&quot;) # For the R-hat version of Vats and Knudson (2018)
+library(&quot;coda&quot;) # For an implementation of the multivariate R-hat of Brooks and Gelman (1998)
+library(&quot;rWishart&quot;) # Wishart distribution
+library(&quot;mcmc&quot;) # for logit data
+
+library(&quot;ggplot2&quot;)
+library(&quot;ggridges&quot;)
+
+
+devtools::load_all()
+
+source(paste(r_folder, &quot;import/monitornew.R&quot;, sep=&quot;&quot;))
+source(paste(r_folder, &quot;import/r_star_monitor.R&quot;, sep=&quot;&quot;))</code></pre>
+<div id="multivariate-examples" class="section level1">
+<h1>Multivariate examples</h1>
+<p>In the multivariate case when <span class="math inline">\(\boldsymbol{\theta}=(\theta_1, \ldots, \theta_d)\in{\mathbb R}^d\)</span>, we suggest to apply <span class="math inline">\(\hat{R}\)</span> on a multivariate indicator variable <span class="math inline">\(I_{\boldsymbol{x}}^{(j)} = \mathbb{I}\{\theta_1^{(j)} \leq x_1, \ldots, \theta_d^{(j)} \leq x_d\}\)</span> for any <span class="math inline">\(\boldsymbol{x} = (x_1, \ldots, x_d) \in \mathbb{R}^d\)</span> in two steps:</p>
+<p>Thus we recommend to compute the multivariate version only in the case where all the univariate one doesn’t detect any convergence issue, this is why in the part we will focus only of cases where the margins are the same (for example uniform).</p>
+<div id="bivariate-case-normal-distributions" class="section level2">
+<h2>Bivariate Case: Normal distributions</h2>
+<p>In this section, we focus on two-dimensional parameters on which we aim at diagnose convergence of the corresponding MCMC (with any number of chains). This restriction allows to navigate easily between the positive dependence and the negative one of the two components.</p>
+<p>In particular, we consider bivariate normal densities with zero means, and compare <span class="math inline">\(m-1\)</span> chains with identity covariance matrix, and one with non-zero off-diagonal elements <span class="math inline">\(\rho \in (-1,1)\)</span>.</p>
+<p>We start by define the function that will allows us to generate <span class="math inline">\(m\)</span> chains of size <span class="math inline">\(n\)</span> with this configuration :</p>
+<pre class="r"><code>gen_bvnormal_chains &lt;- function(M, N, rho){
+  sig_matrix &lt;- (1-rho) * diag(2) + matrix(rho, nrow=2, ncol=2)
+  return (array(c(mvrnorm((M-1)*N, mu = rep(0, 2), Sigma = diag(2)), 
+                  mvrnorm(N, mu = rep(0, 2), Sigma = sig_matrix)), c(N,2,M)))
+}</code></pre>
+<p>As an example, we consider the case with <span class="math inline">\(m=4\)</span> chains of size <span class="math inline">\(n=100\)</span>, and <span class="math inline">\(\rho = 0.9\)</span> on the last chain. This choice of <span class="math inline">\(n\)</span> relatively small is due to the fact the elements in the chain are i.i.d here, so <span class="math inline">\(n\)</span> can be seen as an effective sample size for a given chain here.</p>
+<p>We simulate 100 experiments, which result as 100 draws of the different <span class="math inline">\(\hat{R}\)</span>.</p>
+<p>Histogram of the corresponding values of <span class="math inline">\(\hat{R}_\infty\)</span> and the multivariate <span class="math inline">\(\hat{R}\)</span> of Brooks and Gelman (1998) :</p>
+<pre class="r"><code>rho &lt;- 0.9
+M &lt;- 2
+N &lt;- 200
+reps &lt;- 100
+
+r_functions = c(rhat_infinity, brooks_multivariate_rhat)
+r_names = c(&quot;R-hat-infinity&quot;, &quot;Brooks Multivariate R-hat&quot;)
+r_colors = c(colors[3], colors[4])
+
+R_matrix = repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.02, 1.04, 1.06, 1.08, 1.1, 1.12)
+# pdf(file = &quot;/scratch/tmoins/Documents/Code_rhat/figure_article/hist_bivariate.pdf&quot;, width = 12, height = 7)
+plot_hist(R_matrix, colors = r_colors, bin_size = 0.0045, 
+          lim_y_axis = 30, vaxis_pos = 0.995,
+          xlabels = xlabels, plot_threshold = F)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/bivariate_hists-1.png" width="1344" /></p>
+<pre class="r"><code># dev.off()</code></pre>
+<p>In comparison, the value of <span class="math inline">\(R^*\)</span> of Lambert and Vehtari (2020) seems to detect non-convergence but has the same reproducability issue as in the univariate case (+ slow):</p>
+<pre class="r"><code>rho &lt;- 0.9
+M &lt;- 4
+N &lt;- 200
+reps &lt;- 20
+
+r_functions &lt;- c(r_star_gbm)
+r_names &lt;- c(&quot;R-star&quot;)
+r_colors &lt;- c(colors[2])
+
+R_matrix &lt;- repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# plot_hist(R_matrix, colors = r_colors, nbreaks = 15, lim_y_axis = 10, plot_threshold = F)
+
+plot_hist(R_matrix, colors = r_colors, bin_size = 0.04, 
+          lim_y_axis = 10, vaxis_pos = 0.9,
+          plot_threshold = F)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/bivariate_rstar-1.png" width="1344" /></p>
+<p>Finally the version of Vats and Knudson (2018) is not giving satisfying results here:</p>
+<pre class="r"><code>R_matrix_vats = repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                             r_func = c(vats_multivariate_rhat), 
+                             r_names = c(&quot;Vats Multivariate R-hat&quot;), 
+                             reps = reps)
+print(&quot;Corresponding value of the R-hat version of Vats and Knudson (2018):&quot;)</code></pre>
+<pre><code>[1] &quot;Corresponding value of the R-hat version of Vats and Knudson (2018):&quot;</code></pre>
+<pre class="r"><code>print(R_matrix_vats[,1])</code></pre>
+<pre><code> [1] 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1</code></pre>
+<div id="evolution-of-the-different-value-of-hatr-with-rho" class="section level3">
+<h3>Evolution of the different value of <span class="math inline">\(\hat{R}\)</span> with <span class="math inline">\(\rho\)</span></h3>
+<p>Except for <span class="math inline">\(R^*\)</span>, we consider the mean of the 100 draws for the different versions of <span class="math inline">\(\hat{R}\)</span>, and plot the evolution of this value with <span class="math inline">\(\rho\)</span>:</p>
+<pre class="r"><code>rho_list = c(-0.99, -0.9, -0.7, -0.5, -0.2, 0, 0.2, 0.5, 0.7, 0.9, 0.99)
+
+d = 2
+M = 2
+N = 500
+reps = 10
+
+
+r_functions = c(rhat_infinity, brooks_multivariate_rhat)
+r_names = c(&quot;R-hat-infinity&quot;, &quot;Brooks R-hat&quot;)
+
+R_values = c()
+x_val = c()
+theoretical_R = c()
+
+
+for (rho in rho_list){
+  R_val_rho = repetitions_R(chains_func = (function() gen_bvnormal_chains(M, N, rho)), 
+                                    r_func = r_functions, 
+                                    r_names = r_names, 
+                                    reps = reps)
+  R_values = rbind(R_values, R_val_rho)
+  x_val = c(x_val, rep(rho, reps))
+  
+  sig_matrix &lt;- (1-rho) * diag(2) + matrix(rho, nrow=2, ncol=2)
+  dists &lt;- c((function(q) mvtnorm::pmvnorm(upper = q, sigma = diag(2))[1]),
+             (function(q) mvtnorm::pmvnorm(upper = q, sigma = sig_matrix)[1]))
+  theoretical_R = c(theoretical_R, max_r_dist_bivariate(npoints = 200, 
+                                                        xlim = c(-3,3), 
+                                                        dists = dists))
+}
+
+# pdf(file = &quot;/scratch/tmoins/Documents/Code_rhat/figure_article/rho_curve.pdf&quot;, width = 12, height = 7)
+par(mar=c(4,5.5,2,2))
+plot(x=x_val, y=R_values[,1],
+     col = c(colors[3]), pch = 19,
+     xlab = expression(rho[&quot;m&quot;]), ylab = &quot;&quot;,
+     xaxs=&quot;i&quot;, yaxs=&quot;i&quot;, bty = &quot;n&quot;,
+     xaxt = &quot;n&quot;, yaxt = &quot;n&quot;,
+     cex.lab = 2, cex.main = 2,
+     lwd=9,
+     xlim = c(-1.01, 1.02), ylim = c(0.999,1.155))
+points(x=x_val, y=R_values[,2], 
+       col = c(colors[4]), pch = 19,
+       lwd=9)
+lines(rho_list, theoretical_R, type=&quot;l&quot;, col = colors[2], lwd=6, lty = 2)
+points(x=rho_list, y=theoretical_R, 
+       col = c(colors[2]), pch = 19,
+       lwd=9)
+xlabels = c(1, 1.03, 1.06, 1.09, 1.12, 1.15)
+ylabels = c(-1, -0.5, 0, 0.5, 1)
+axis(1, labels=ylabels, at=ylabels, cex.axis=2, lwd=3, mgp = c(1,1,0))
+axis(2, labels=xlabels, at=xlabels, cex.axis=2, mgp = c(1,0.5,0), lwd=2)
+legend(x=0.6, y=1.14, col=c(colors[4], colors[3], colors[2]), pch=19, 
+       legend = c(expression(italic(hat(R))),
+                  expression(italic(hat(R)[infinity])),
+                  expression(italic(R[infinity]))), cex=2)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/bivariate_rho-1.png" width="1344" /></p>
+<pre class="r"><code># dev.off()</code></pre>
+<p>Remarks :</p>
+<ul>
+<li>Our version is the most sensitive, and is more sensitive as <span class="math inline">\(|\rho|\)</span> increases (which is great)</li>
+<li>The asymmetry can be link to the theoretical computations. WARNING: in the case where <span class="math inline">\(d=2\)</span>, the orders on the two bounds PQD and NQD are inverted (compared to the asymptotic behavior), and that is why here we are more sensitive when <span class="math inline">\(\rho &lt; 0\)</span> (which is counter-intuitive)</li>
+</ul>
+</div>
+</div>
+<div id="general-number-of-dimensions" class="section level2">
+<h2>General number of dimensions</h2>
+<div id="generation-of-a-covariance-matrix" class="section level3">
+<h3>Generation of a covariance matrix</h3>
+<p>In the general case, we still compare <span class="math inline">\(m-1\)</span> chains that follows a multivariate normal distribution with identity covariance matrix with one that has a given covariance matrix <span class="math inline">\(\Sigma\)</span>.</p>
+<p>We generate <span class="math inline">\(\Sigma\)</span> from a sample of a Wishart distribtution <span class="math inline">\(S\)</span>, and in order to keep the same margins for our chains, we transform <span class="math inline">\(S\)</span> to have ones on the diagonal : <span class="math display">\[
+\Sigma = D^{-1/2} S D^{-1/2}, 
+\quad \text{ with } \quad 
+D = \text{Diag}\left(s_{1,1}, \ldots, s_{d,d}\right)
+\]</span></p>
+<p>From the theoretical part, we know that the value given by <span class="math inline">\(\hat{R}_\infty\)</span> depends on the direction of dependence. Thus, we can either fix <span class="math inline">\(\Sigma\)</span> and study the behaviour of the different <span class="math inline">\(\hat{R}\)</span>, or sample a new <span class="math inline">\(\Sigma\)</span> for each draw of <span class="math inline">\(\hat{R}\)</span>.</p>
+<pre class="r"><code>generate_sigma_matrix &lt;- function(d){
+  S = rWishart(1, d, diag(d))[,,1]
+  S = diag(1/sqrt(diag(S))) %*% S %*% diag(1/sqrt(diag(S)))
+  return (S)
+}
+
+gen_mvnormal_chains &lt;- function(M, N, d, S=NULL){
+  if (is.null(S)){
+    S = generate_sigma_matrix(d)
+  }
+  return (array(c(mvrnorm((M-1)*N, mu = rep(0, d), Sigma = diag(d)), 
+                  mvrnorm(N, mu = rep(0, d), Sigma = S)), 
+                c(N,d,M)))
+}</code></pre>
+<p>First, we start by considering <span class="math inline">\(d=5\)</span> and study the behavior of <span class="math inline">\(\hat{R}_\infty\)</span> and the multivariate <span class="math inline">\(\hat{R}\)</span> of Brooks and Gelman (1998) on a given <span class="math inline">\(\Sigma\)</span> for the last chain:</p>
+<pre class="r"><code>d = 5
+
+M = 4
+N = 100
+reps = 100
+
+r_functions = c(brooks_multivariate_rhat, rhat_infinity)
+r_names = c(&quot;Brooks Multivariate R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors = c(colors[3], colors[4])
+
+S = generate_sigma_matrix(d)
+print(S)</code></pre>
+<pre><code>             [,1]       [,2]         [,3]       [,4]        [,5]
+[1,]  1.000000000 -0.9457337  0.005136087 -0.7095734 -0.48216422
+[2,] -0.945733693  1.0000000 -0.106785711  0.7081939  0.32340704
+[3,]  0.005136087 -0.1067857  1.000000000 -0.6175323 -0.06749833
+[4,] -0.709573406  0.7081939 -0.617532256  1.0000000  0.35258259
+[5,] -0.482164221  0.3234070 -0.067498335  0.3525826  1.00000000</code></pre>
+<pre class="r"><code>R_matrix = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d, S)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# plot_hist(R_matrix, colors = r_colors, nbreaks = 20, lim_y_axis = 30, plot_threshold = F)
+plot_hist(R_matrix, colors = r_colors, bin_size = 0.002, 
+          lim_y_axis = 25, vaxis_pos = 1,
+          plot_threshold = F)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/multivariate_hist1-1.png" width="1344" /></p>
+<p>Doing the same experiment but with a new <span class="math inline">\(\Sigma\)</span> on each repetitions will result on a histogram more spread for <span class="math inline">\(\hat{R}_\infty\)</span>:</p>
+<pre class="r"><code>d = 5
+
+M = 4
+N = 100
+reps = 100
+
+
+r_functions = c(rhat_infinity, brooks_multivariate_rhat)
+r_names = c(&quot;R-hat-infinity&quot;, &quot;Brooks Multivariate R-hat&quot;)
+r_colors = c(colors[3], colors[4])
+
+R_matrix = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+# plot_hist(R_matrix, colors = r_colors, nbreaks = 20, lim_y_axis = 30, plot_threshold = F)
+xlabels = c(1, 1.02, 1.04, 1.06, 1.08)
+plot_hist(R_matrix, colors = r_colors, 
+          xlabels = xlabels, bin_size = 0.002, 
+          lim_y_axis = 20, vaxis_pos = 0.997,
+          plot_threshold = F)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/multivariate_hist2-1.png" width="1344" /></p>
+<p>\textit{Le problème en grande dimension : aucun point n’a toutes ces coordonnées plus petite que les autres ! Déjà lorsque d = 2, le problème est déjà présent avec plusieurs points produisant des NaN values. Exemple avec d=2, N=100, M=2:</p>
+<p>-0.9640542 -2.8385044 -0.7183567 -3.3431770 -2.579755 -1.719382 -1.762459 -1.977133</p>
+<p>Tout ces points sont des ""“minimas”"", à l’inverse du cas d=1 où 1 seul est possible.}</p>
+<p>To avoid this issue, <span class="math inline">\(\hat{R}_\infty\)</span> can be computed on all directions, which means if <span class="math inline">\(d=3\)</span> that <span class="math inline">\(\hat{R}\)</span> is computed on <span class="math display">\[
+  I\left(\theta_1^{(n,m)} \leq x_1, \theta_2^{(n,m)} \leq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+  I\left(\theta_1^{(n,m)} \geq x_1, \theta_2^{(n,m)} \leq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+  I\left(\theta_1^{(n,m)} \leq x_1, \theta_2^{(n,m)} \geq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+  I\left(\theta_1^{(n,m)} \geq x_1, \theta_2^{(n,m)} \geq x_2, \theta_3^{(n,m)} \leq x_3\right)\\
+\]</span> The other half of the possibilities is avoided by symmetry. Then, we can define <span class="math inline">\(\hat{R}^{(\text{max})}_\infty\)</span> as the maximum of all the <span class="math inline">\(\hat{R}_\infty\)</span> computed on all directions. Despite a unreasonable computational cost (with <span class="math inline">\(2^{d-1}\)</span> <span class="math inline">\(\hat{R}_\infty\)</span> to compute), this solutions seems satisfying in small dimension:</p>
+<pre class="r"><code># d_max = 6
+# 
+# M = 4
+# N = 100
+# reps = 200
+# 
+# 
+# r_functions = c(rhat_infinity, rhat_infinity_max_directions)
+# r_names = c(&quot;One Direction&quot;, &quot;All Directions&quot;)
+# 
+# R_values = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, 2)), 
+#                          r_func = r_functions, 
+#                          r_names = r_names, 
+#                          reps = reps)
+# 
+# 
+# R_array = array(c(R_values[,1], rep(&quot;d = 2&quot;, reps), rep(&quot;1 Dir&quot;, reps)), dim = c(reps,3))
+# R_array = rbind(R_array, array(c(R_values[,2], rep(&quot;d = 2&quot;, reps), rep(&quot;All Dir&quot;, reps)), dim = c(reps,3)))
+# colnames(R_array) = c(&quot;Values&quot;, &quot;Dim&quot;, &quot;Nb_Dir&quot;)
+# 
+# for (d in 3:d_max){
+#   R_val_d = repetitions_R(chains_func = (function() gen_mvnormal_chains(M, N, d)), 
+#                              r_func = r_functions, 
+#                              r_names = r_names, 
+#                              reps = reps)
+#   d_names = c(paste(&quot;d =&quot;, d))
+#   R_array = rbind(R_array, array(c(R_val_d[,1], rep(d_names, reps), rep(&quot;1 Dir&quot;, reps)), dim = c(reps,3)))
+#   R_array = rbind(R_array, array(c(R_val_d[,2], rep(d_names, reps), rep(&quot;All Dir&quot;, reps)), dim = c(reps,3)))
+# 
+# }
+# 
+# R_df = as.data.frame(R_array)
+# R_df$Values = as.numeric(R_df$Values)
+# 
+# # pdf(file = &quot;/scratch/tmoins/Documents/Code_rhat/figure_article/hist_directions.pdf&quot;, width = 18, height = 8)
+# ggplot(R_df, aes(x = Values, y = as.factor(Dim), fill = Nb_Dir)) + 
+#   geom_density_ridges(stat = &quot;binline&quot;, bins= 40,
+#                       scale = 1, alpha = 0.7) +
+#   scale_y_discrete(limits = R_df$Dim) +
+#   ylab(&quot;Dimensions&quot;) + labs(fill = element_blank()) +
+#   scale_x_continuous(limits = c(1,1.14),
+#                      n.breaks = 8) +
+#   scale_fill_manual(values=c(&quot;#32a632&quot;, &quot;#4287f5&quot;)) +
+#   theme_ridges(font_size=22)
+# # dev.off()</code></pre>
+<p>(WARNING: <span class="math inline">\(d&gt;6\)</span> the chunk is very dangerous to run!!)</p>
+</div>
+</div>
+<div id="logistic-regression" class="section level2">
+<h2>Logistic regression</h2>
+<p>As a practical bayesian example, we consider hierarchical logistic regression using the following model:</p>
+<pre class="r"><code>writeLines(readLines(paste(stan_folder, &quot;logit_reg.stan&quot;, sep=&quot;&quot;)))</code></pre>
+<pre><code>data {
+  int&lt;lower=1&gt; D;
+  int&lt;lower=0&gt; N;
+  real&lt;lower=0&gt; tau;
+  int&lt;lower=0, upper=1&gt; y[N];
+  real x[N,D];
+}
+
+parameters {
+  real bet[D];
+}
+
+model {
+  for (d in 1:D)
+    bet[d] ~ normal(0, tau);    
+
+  for (n in 1:N)
+    y[n] ~ bernoulli(inv_logit(dot_product(x[n], bet)));
+}</code></pre>
+<p>We run Stan using the dataset  available in the package .</p>
+<pre class="r"><code>data(&quot;logit&quot;)
+d &lt;- 4
+logit_data&lt;- read_rdump(paste(stan_folder, &quot;logit_reg.data.R&quot;, sep=&quot;&quot;))
+fit_logit &lt;- stan(file = paste(stan_folder, &quot;logit_reg.stan&quot;, sep=&quot;&quot;),
+                  data=logit_data, seed = 12,
+                  iter=400, chains=4, refresh=0)</code></pre>
+<pre><code>Trying to compile a simple C file</code></pre>
+<pre><code>Running /usr/lib/R/bin/R CMD SHLIB foo.c
+gcc -std=gnu99 -std=gnu11 -I&quot;/usr/share/R/include&quot; -DNDEBUG   -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/Rcpp/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/unsupported&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/BH/include&quot; -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/src/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppParallel/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/rstan/include&quot; -DEIGEN_NO_DEBUG  -DBOOST_DISABLE_ASSERTS  -DBOOST_PENDING_INTEGER_LOG2_HPP  -DSTAN_THREADS  -DBOOST_NO_AUTO_PTR  -include &#39;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp&#39;  -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1      -fpic  -g -O2 -fdebug-prefix-map=/build/r-base-J7pprH/r-base-4.1.2=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -g  -c foo.c -o foo.o
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:88:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:1: error: unknown type name ‘namespace’
+ namespace Eigen {
+ ^~~~~~~~~
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:17: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘{’ token
+ namespace Eigen {
+                 ^
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:96:10: fatal error: complex: Aucun fichier ou dossier de ce type
+ #include &lt;complex&gt;
+          ^~~~~~~~~
+compilation terminated.
+/usr/lib/R/etc/Makeconf:168: recipe for target &#39;foo.o&#39; failed
+make: *** [foo.o] Error 1</code></pre>
+<pre class="r"><code>mon &lt;- monitor(fit_logit)
+
+chains &lt;- as.array(fit_logit)
+dim_chains &lt;- dim(chains)
+
+rhat_inf &lt;- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i &lt;- chains[, , i]
+  rhat_inf_i &lt;- rhat_infinity(chains_i, max_nb_points = &quot;ALL&quot;)
+  rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+}
+
+mon[[&quot;Rhat_inf&quot;]] &lt;- rhat_inf
+
+mon</code></pre>
+<pre><code>Inference for the input samples (4 chains: each with iter = 400; warmup = 200):
+
+           Q5    Q50    Q95   Mean   SD  Rhat Bulk_ESS Tail_ESS Rhat_inf
+bet[1]   0.15   0.52   0.89   0.52 0.23  1.01      808      669     1.00
+bet[2]   0.25   0.60   0.98   0.61 0.22  1.00      729      691     1.01
+bet[3]  -0.05   0.26   0.62   0.28 0.21  1.01      949      626     1.01
+bet[4]   0.01   0.41   0.81   0.41 0.24  1.00      641      501     1.00
+lp__   -55.84 -52.93 -51.56 -53.22 1.36  1.00      458      496     1.01
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<pre class="r"><code>summary(mon[1:d, &#39;Rhat&#39;])</code></pre>
+<pre><code>   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+ 0.9998  1.0029  1.0046  1.0039  1.0056  1.0068 </code></pre>
+<pre class="r"><code>summary(mon[1:d, &#39;Rhat_inf&#39;])</code></pre>
+<pre><code>   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  1.004   1.004   1.006   1.006   1.008   1.009 </code></pre>
+<pre class="r"><code>mon[d+1, &quot;Rhat_inf&quot;]</code></pre>
+<pre><code>   lp__ 
+1.00898 </code></pre>
+<pre class="r"><code>perm_chains &lt;- aperm(chains, c(1,3,2))
+rhat_infinity_max_directions(perm_chains)</code></pre>
+<pre><code>[1] 1.015236</code></pre>
+<pre class="r"><code>reps &lt;- 50
+
+gen_beta_logit &lt;- function(i){
+  # fit_logit &lt;- stan(file = paste(stan_folder, &quot;logit_reg.stan&quot;, sep=&quot;&quot;),
+                    # data=logit_data,
+                    # iter=400, chains=4, refresh=0)
+  # saveRDS(fit_logit, paste(stan_folder, &quot;logit/logit_reg_&quot;, i, &quot;.rds&quot;, sep=&quot;&quot;))
+  fit_logit &lt;- readRDS(paste(stan_folder, &quot;logit/logit_reg_&quot;, i, &quot;.rds&quot;, sep=&quot;&quot;))
+  mon &lt;- monitor(fit_logit)
+  
+  chains &lt;- as.array(fit_logit)
+  
+  return (aperm(chains, c(1,3,2)))
+}
+
+r_functions = c(brooks_multivariate_rhat, rhat_infinity_max_directions)
+r_names = c(&quot;Brooks Multivariate R-hat&quot;, &quot;max-R-hat&quot;)
+r_colors = c(colors[4], colors[5])
+
+R_matrix_logit &lt;- repetitions_R(chains_func = gen_beta_logit, 
+                                 r_func = r_functions, 
+                                 r_names = r_names, 
+                                 reps = reps, saved_model = TRUE)
+
+# pdf(file = &quot;/scratch/tmoins/Documents/Code_rhat/figure_article/hist_logit.pdf&quot;, width = 12, height = 7)
+plot_hist(R_matrix_logit, colors = r_colors, 
+          vaxis_pos = 0.998,
+          bin_size = 0.003, lim_y_axis = 25)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/unnamed-chunk-9-1.png" width="1344" /></p>
+<pre class="r"><code># dev.off()</code></pre>
+<pre class="r"><code>gen_beta_logit_lp &lt;- function(i){
+  fit_logit &lt;- readRDS(paste(stan_folder, &quot;logit/logit_reg_&quot;, i, &quot;.rds&quot;, sep=&quot;&quot;))
+  mon &lt;- monitor(fit_logit)
+  chains &lt;- as.array(fit_logit)
+  return (chains[, , 5])
+}
+
+r_functions &lt;- c(rhat_infinity)
+r_names &lt;- c(&quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[3])
+
+R_matrix_logit2 &lt;- repetitions_R(chains_func = gen_beta_logit_lp, 
+                                 r_func = r_functions, 
+                                 r_names = r_names, 
+                                 reps = reps, saved_model = TRUE)
+
+xlabels = c(1, 1.005, 1.01, 1.015, 1.02, 1.025)
+# pdf(file = &quot;/scratch/tmoins/Documents/Code_rhat/figure_article/hist_logit2.pdf&quot;, width = 12, height = 7)
+plot_hist(R_matrix_logit2, colors = r_colors,
+          xlabels = xlabels,
+          bin_size = 0.002, lim_y_axis = 25)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/unnamed-chunk-10-1.png" width="1344" /></p>
+<pre class="r"><code># dev.off()</code></pre>
+</div>
+</div>
+<div id="wide-multivariate-normal" class="section level1">
+<h1>Wide multivariate normal</h1>
+<pre class="r"><code>writeLines(readLines(paste(stan_folder, &quot;mvn.stan&quot;, sep=&quot;&quot;)))</code></pre>
+<pre><code>data {
+  int N;
+}
+
+parameters {
+  vector[N] x;
+}
+
+model {
+  x ~ std_normal();
+}</code></pre>
+<pre class="r"><code>generate_sigma_matrix &lt;- function(d){
+  S = rWishart(1, d, diag(d))[,,1]
+  S = diag(1/sqrt(diag(S))) %*% S %*% diag(1/sqrt(diag(S)))
+  return (S)
+}
+
+d &lt;- 8
+A &lt;- generate_sigma_matrix(d)
+fit &lt;- stan(file = paste(stan_folder, &quot;mvn.stan&quot;, sep=&quot;&quot;), data=list(N=d, A=A), iter=400, chains=4, refresh = 0)</code></pre>
+<pre><code>Trying to compile a simple C file</code></pre>
+<pre><code>Running /usr/lib/R/bin/R CMD SHLIB foo.c
+gcc -std=gnu99 -std=gnu11 -I&quot;/usr/share/R/include&quot; -DNDEBUG   -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/Rcpp/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/unsupported&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/BH/include&quot; -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/src/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppParallel/include/&quot;  -I&quot;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/rstan/include&quot; -DEIGEN_NO_DEBUG  -DBOOST_DISABLE_ASSERTS  -DBOOST_PENDING_INTEGER_LOG2_HPP  -DSTAN_THREADS  -DBOOST_NO_AUTO_PTR  -include &#39;/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp&#39;  -D_REENTRANT -DRCPP_PARALLEL_USE_TBB=1      -fpic  -g -O2 -fdebug-prefix-map=/build/r-base-J7pprH/r-base-4.1.2=. -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -g  -c foo.c -o foo.o
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:88:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:1: error: unknown type name ‘namespace’
+ namespace Eigen {
+ ^~~~~~~~~
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/src/Core/util/Macros.h:628:17: error: expected ‘=’, ‘,’, ‘;’, ‘asm’ or ‘__attribute__’ before ‘{’ token
+ namespace Eigen {
+                 ^
+In file included from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Dense:1:0,
+                 from /scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/StanHeaders/include/stan/math/prim/mat/fun/Eigen.hpp:13,
+                 from &lt;command-line&gt;:0:
+/scratch/tmoins/R/x86_64-pc-linux-gnu-library/4.1/RcppEigen/include/Eigen/Core:96:10: fatal error: complex: Aucun fichier ou dossier de ce type
+ #include &lt;complex&gt;
+          ^~~~~~~~~
+compilation terminated.
+/usr/lib/R/etc/Makeconf:168: recipe for target &#39;foo.o&#39; failed
+make: *** [foo.o] Error 1</code></pre>
+<pre class="r"><code>mon &lt;- monitor(fit)
+
+chains &lt;- as.array(fit)
+dim_chains &lt;- dim(chains)
+
+rhat_inf &lt;- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i &lt;- chains[, , i]
+  rhat_inf_i &lt;- rhat_infinity(chains_i, max_nb_points = &quot;ALL&quot;)
+  rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+}
+
+mon[[&quot;Rhat_inf&quot;]] &lt;- rhat_inf
+# summary(mon[1:d, &#39;Rhat_inf&#39;])
+mon</code></pre>
+<pre><code>Inference for the input samples (4 chains: each with iter = 400; warmup = 200):
+
+        Q5   Q50   Q95  Mean   SD  Rhat Bulk_ESS Tail_ESS Rhat_inf
+x[1] -1.74 -0.02  1.61 -0.04 1.01  1.00     1065      555     1.01
+x[2] -1.59 -0.03  1.66 -0.01 0.99  1.01     1444      683     1.01
+x[3] -1.75 -0.01  1.61 -0.02 1.02  1.02     1485      601     1.00
+x[4] -1.73 -0.03  1.64 -0.04 1.02  1.01     1360      660     1.00
+x[5] -1.57  0.05  1.71  0.03 1.01  1.00     1434      616     1.00
+x[6] -1.64  0.00  1.52 -0.02 0.96  1.00     1680      516     1.01
+x[7] -1.63 -0.06  1.64 -0.04 1.00  1.00     1431      575     1.01
+x[8] -1.77 -0.02  1.84  0.01 1.06  1.01     1406      559     1.01
+lp__ -7.53 -3.78 -1.52 -4.07 1.94  1.01      341      450     1.02
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<pre class="r"><code># mon[d+1, &quot;Rhat_inf&quot;]</code></pre>
+<pre class="r"><code>which_max_rhat_inf &lt;- which.max(mon[1:d, &#39;Rhat_inf&#39;])
+
+simulated_rhat = all_local_rhat(chains[ , , which_max_rhat_inf], max_nb_points = &quot;ALL&quot;)
+plot_local_r(chains[ , , which_max_rhat_inf], simulated_rhat,
+             col=c(colors[3], colors[2]),
+             xlim = c(-3,3), ylim=c(0.997,1.02), title =&quot;&quot;)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/unnamed-chunk-13-1.png" width="1344" /></p>
+<pre class="r"><code>simulated_rhat = all_local_rhat(chains[ , , d+1], max_nb_points = &quot;ALL&quot;)
+plot_local_r(chains[ , , d+1], simulated_rhat,
+             col=c(colors[3], colors[2]),
+             xlim = c(min(chains), 0), ylim=c(0.997,1.02), title =&quot;&quot;)</code></pre>
+<p><img src="Simulations_multivariate_files/figure-html/unnamed-chunk-14-1.png" width="1344" /></p>
+<pre class="r"><code>perm_chains &lt;- aperm(chains, c(1,3,2))
+rhat_infinity_max_directions(perm_chains)</code></pre>
+<pre><code>[1] 1.018989</code></pre>
+<pre class="r"><code>d &lt;- 8
+A &lt;- generate_sigma_matrix(d)
+fit_mvn &lt;- stan(file = paste(stan_folder, &quot;mvn.stan&quot;, sep=&quot;&quot;), data=list(N=d, A=A), iter=800, chains=4, refresh = 0)
+mon &lt;- monitor(fit_mvn)
+
+chains &lt;- as.array(fit_mvn)
+dim_chains &lt;- dim(chains)
+
+rhat_inf &lt;- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i &lt;- chains[, , i]
+  rhat_inf_i &lt;- rhat_infinity(chains_i, max_nb_points = &quot;ALL&quot;)
+  rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+}
+
+mon[[&quot;Rhat_inf&quot;]] &lt;- rhat_inf
+mon</code></pre>
+<pre><code>Inference for the input samples (4 chains: each with iter = 800; warmup = 400):
+
+        Q5   Q50   Q95  Mean   SD  Rhat Bulk_ESS Tail_ESS Rhat_inf
+x[1] -1.61  0.04  1.59  0.01 0.98  1.00     3251      906     1.00
+x[2] -1.67 -0.01  1.69  0.00 1.02  1.00     2728     1215     1.00
+x[3] -1.70  0.01  1.75  0.02 1.04  1.00     2682     1211     1.00
+x[4] -1.70  0.00  1.72  0.02 1.03  1.00     2996     1276     1.00
+x[5] -1.63  0.00  1.69 -0.01 1.03  1.00     2969     1244     1.00
+x[6] -1.62  0.02  1.66  0.00 1.00  1.01     2784     1055     1.01
+x[7] -1.64  0.00  1.65  0.02 1.01  1.00     3072     1229     1.00
+x[8] -1.59  0.05  1.63  0.03 0.98  1.00     2736     1379     1.01
+lp__ -7.71 -3.83 -1.48 -4.10 1.96  1.00      843     1077     1.00
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<pre class="r"><code>summary(mon[1:d, &#39;Rhat_inf&#39;])</code></pre>
+<pre><code>   Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+  1.001   1.002   1.003   1.004   1.005   1.008 </code></pre>
+<pre class="r"><code># mon[d+1, &quot;Rhat_inf&quot;]</code></pre>
+<pre class="r"><code>perm_chains &lt;- aperm(chains, c(1,3,2))
+rhat_infinity_max_directions(perm_chains)</code></pre>
+<pre><code>[1] 1.010207</code></pre>
+<pre class="r"><code>d &lt;- 8
+A &lt;- generate_sigma_matrix(d)
+fit &lt;- stan(file = paste(stan_folder, &quot;mvn.stan&quot;, sep=&quot;&quot;), data=list(N=d, A=A), iter=100, chains=4, refresh = 0)
+mon &lt;- monitor(fit)
+
+chains &lt;- as.array(fit)
+dim_chains &lt;- dim(chains)
+
+rhat_inf &lt;- c()
+
+for (i in 1:dim_chains[3]) {
+  chains_i &lt;- chains[, , i]
+  rhat_inf_i &lt;- rhat_infinity(chains_i, max_nb_points = &quot;ALL&quot;)
+  rhat_inf &lt;- c(rhat_inf, rhat_inf_i)
+}
+
+mon[[&quot;Rhat_inf&quot;]] &lt;- rhat_inf
+# summary(mon[1:d, &#39;Rhat_inf&#39;])
+mon</code></pre>
+<pre><code>Inference for the input samples (4 chains: each with iter = 100; warmup = 50):
+
+        Q5   Q50   Q95  Mean   SD  Rhat Bulk_ESS Tail_ESS Rhat_inf
+x[1] -1.71  0.08  1.61  0.06 0.98  1.02      460      234     1.02
+x[2] -1.93 -0.11  1.81 -0.01 1.10  1.03      460      195     1.02
+x[3] -1.80  0.12  1.95  0.09 1.10  1.00      368      175     1.01
+x[4] -1.45  0.06  1.28  0.06 0.86  1.00      460      226     1.01
+x[5] -1.93 -0.15  1.71 -0.05 1.08  1.02      460      185     1.02
+x[6] -1.53 -0.10  1.46 -0.05 0.87  1.02      460      194     1.02
+x[7] -1.66 -0.13  1.72 -0.04 1.05  1.11      460      110     1.03
+x[8] -1.70 -0.03  1.81 -0.03 1.09  1.06      394      154     1.05
+lp__ -8.43 -3.74 -1.28 -4.16 2.27  1.03       99      156     1.02
+
+For each parameter, Bulk_ESS and Tail_ESS are crude measures of 
+effective sample size for bulk and tail quantities respectively (an ESS &gt; 100 
+per chain is considered good), and Rhat is the potential scale reduction 
+factor on rank normalized split chains (at convergence, Rhat &lt;= 1.01).</code></pre>
+<pre class="r"><code># mon[d+1, &quot;Rhat_inf&quot;]
+perm_chains &lt;- aperm(chains, c(1,3,2))
+vats_multivariate_rhat(perm_chains)</code></pre>
+<pre><code>[1] 0.997706</code></pre>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

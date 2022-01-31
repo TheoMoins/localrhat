@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+
+<meta name="author" content="Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy" />
+
+
+<title>Improving MCMC convergence diagnostic with a local version of R-hat: Known distributions on the chains</title>
+
+<script src="Simulations_known_dist_files/header-attrs-2.11/header-attrs.js"></script>
+<script src="Simulations_known_dist_files/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link href="Simulations_known_dist_files/bootstrap-3.3.5/css/bootstrap.min.css" rel="stylesheet" />
+<script src="Simulations_known_dist_files/bootstrap-3.3.5/js/bootstrap.min.js"></script>
+<script src="Simulations_known_dist_files/bootstrap-3.3.5/shim/html5shiv.min.js"></script>
+<script src="Simulations_known_dist_files/bootstrap-3.3.5/shim/respond.min.js"></script>
+<style>h1 {font-size: 34px;}
+       h1.title {font-size: 38px;}
+       h2 {font-size: 30px;}
+       h3 {font-size: 24px;}
+       h4 {font-size: 18px;}
+       h5 {font-size: 16px;}
+       h6 {font-size: 12px;}
+       code {color: inherit; background-color: rgba(0, 0, 0, 0.04);}
+       pre:not([class]) { background-color: white }</style>
+<script src="Simulations_known_dist_files/navigation-1.1/tabsets.js"></script>
+<link href="Simulations_known_dist_files/highlightjs-9.12.0/default.css" rel="stylesheet" />
+<script src="Simulations_known_dist_files/highlightjs-9.12.0/highlight.js"></script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
+
+<style type="text/css">code{white-space: pre;}</style>
+<script type="text/javascript">
+if (window.hljs) {
+  hljs.configure({languages: []});
+  hljs.initHighlightingOnLoad();
+  if (document.readyState && document.readyState === "complete") {
+    window.setTimeout(function() { hljs.initHighlighting(); }, 0);
+  }
+}
+</script>
+
+
+
+
+
+
+
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+img {
+  max-width:100%;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+.html-widget {
+  margin-bottom: 20px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+summary {
+  display: list-item;
+}
+pre code {
+  padding: 0;
+}
+</style>
+
+
+
+<!-- tabsets -->
+
+<style type="text/css">
+.tabset-dropdown > .nav-tabs {
+  display: inline-table;
+  max-height: 500px;
+  min-height: 44px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.tabset-dropdown > .nav-tabs > li.active:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li.active:before {
+  content: "&#xe258;";
+  border: none;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open:before {
+  content: "";
+  font-family: 'Glyphicons Halflings';
+  display: inline-block;
+  padding: 10px;
+  border-right: 1px solid #ddd;
+}
+
+.tabset-dropdown > .nav-tabs > li.active {
+  display: block;
+}
+
+.tabset-dropdown > .nav-tabs > li > a,
+.tabset-dropdown > .nav-tabs > li > a:focus,
+.tabset-dropdown > .nav-tabs > li > a:hover {
+  border: none;
+  display: inline-block;
+  border-radius: 4px;
+  background-color: transparent;
+}
+
+.tabset-dropdown > .nav-tabs.nav-tabs-open > li {
+  display: block;
+  float: none;
+}
+
+.tabset-dropdown > .nav-tabs > li {
+  display: none;
+}
+</style>
+
+<!-- code folding -->
+
+
+
+
+</head>
+
+<body>
+
+
+<div class="container-fluid main-container">
+
+
+
+
+<div id="header">
+
+
+
+<h1 class="title toc-ignore">Improving MCMC convergence diagnostic with a local version of R-hat: Known distributions on the chains</h1>
+<h4 class="author">Khalil Leachouri, Théo Moins, Julyan Arbel, Stéphane Girard, Anne Dutfoy</h4>
+<h4 class="date">6/18/2021</h4>
+
+</div>
+
+<div id="TOC">
+<ul>
+<li><a href="#uniform-and-pareto-distribution">Uniform and Pareto distribution:</a>
+<ul>
+<li><a href="#uniform-distribution">Uniform distribution</a></li>
+</ul></li>
+<li><a href="#pareto-distribution">Pareto distribution</a></li>
+<li><a href="#counter-examples-for-rank-rhat">Counter examples for Rank-Rhat</a>
+<ul>
+<li><a href="#gaussienne-uniforme">Gaussienne + uniforme</a></li>
+<li><a href="#laplace-uniforme">Laplace + uniforme</a></li>
+<li><a href="#exponential-uniforme">Exponential + uniforme</a></li>
+</ul></li>
+<li><a href="#chains-with-the-same-distributions">Chains with the same distributions</a>
+<ul>
+<li><a href="#uniform">Uniform</a></li>
+<li><a href="#pareto">Pareto</a></li>
+</ul></li>
+<li><a href="#summary">Summary</a></li>
+</ul>
+</div>
+
+<pre class="r"><code>library(&quot;EnvStats&quot;)
+library(&#39;jmuOutlier&#39;)
+library(&quot;ggplot2&quot;)
+library(&quot;rstan&quot;)
+
+devtools::load_all()
+
+source(paste(r_folder, &quot;import/monitornew.R&quot;, sep=&quot;&quot;))
+source(paste(r_folder, &quot;import/r_star_monitor.R&quot;, sep=&quot;&quot;))
+
+N &lt;- 500
+reps &lt;- 500</code></pre>
+<div id="uniform-and-pareto-distribution" class="section level2">
+<h2>Uniform and Pareto distribution:</h2>
+<p>In this part, we will see how our local version can detect a convergence in the two major cases when traditional Rhat can not, which are:</p>
+<ol style="list-style-type: decimal">
+<li>Same mean and different variances: Uniform distribution</li>
+<li>Infinite mean and different variances: Pareto distribution</li>
+</ol>
+<div id="uniform-distribution" class="section level3">
+<h3>Uniform distribution</h3>
+<p>Theoretical value of R(x):</p>
+<pre class="r"><code>sigma &lt;- 3/4
+sigmaM &lt;- 1
+M &lt;- 4
+
+colors &lt;- c(rgb(0.1,0.6,0.1,0.7), rgb(0.1,0.1,0.7,0.7), rgb(0.5, 0, 0.5, 0.8), rgb(0.8, 0.1, 0.1, 0.8), rgb(1,0.6,0,0.8))
+
+uniform_dists &lt;- c(rep(c((function(q) punif(q, -sigma, sigma))), M-1),
+                   (function(q) punif(q, -sigmaM, sigmaM)))
+
+theoretical_r_values &lt;- r_dist_values(npoints = N, xlim = c(-sigmaM, sigmaM),
+                                      dists = uniform_dists)
+
+uniform_rdists &lt;- c((function(n) runif(n, -sigma, sigma)),
+                    (function(n) runif(n, -sigmaM, sigmaM)))
+
+chaines = gen_chains(M, N, uniform_rdists)
+simulated_rhat = all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+xlabels &lt;- c(1, 1.02, 1.04, 1.06, 1.08)
+
+plot_local_r(chaines, simulated_rhat, theoretical_r_values, col=c(colors[3], colors[2]),
+             xlabels = xlabels, plot_legend = FALSE,
+             xlim = c(-1,1), ylim=c(1,1.09), title =&quot;Uniform distributions&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/uniform_r_x-1.png" width="1344" /></p>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;,
+             &quot;Rank-R-hat&quot;,
+             &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[4], colors[5], colors[3])
+
+R_matrix_unif &lt;- repetitions_R(chains_func = (function() gen_chains(M, N, uniform_rdists)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels &lt;- c(1, 1.02, 1.04, 1.06, 1.08, 1.1)
+
+plot_hist(R_matrix_unif, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.0033, lim_y_axis = reps)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/uniform_hist-1.png" width="1344" /></p>
+</div>
+</div>
+<div id="pareto-distribution" class="section level2">
+<h2>Pareto distribution</h2>
+<p>Theoretical value of R(x):</p>
+<pre class="r"><code>eta &lt;- 1
+etaM &lt;- 1.5
+alpha &lt;- 0.8
+M &lt;- 4
+
+pareto_dists &lt;- c(rep(c((function(q) ppareto(q, location = eta, shape = alpha))), M-1),
+                  (function(q) ppareto(q, location = etaM, shape = alpha)))
+
+theoretical_r_values &lt;- r_dist_values(npoints = 1000, xlim = c(-eta, eta*8), 
+                                      dists = pareto_dists)
+
+pareto_rdists &lt;- c((function(n) rpareto(n, location = eta, shape = alpha)),
+                   (function(n) rpareto(n, location = etaM, shape = alpha)))
+
+xlabels &lt;- c(1, 1.02, 1.04, 1.06, 1.08)
+chaines &lt;- gen_chains(M, N, pareto_rdists)
+simulated_rhat &lt;- all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+plot_local_r(chaines, simulated_rhat, theoretical_r_values,
+             plot_legend = FALSE, col=c(colors[3], colors[2]),
+             xlabels = xlabels, xlim = c(1,8), ylim=c(1,1.09), title =&quot;Pareto distributions&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/pareto_r_x-1.png" width="1344" /></p>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[4], colors[5], colors[3])
+
+R_matrix_pareto &lt;- repetitions_R(chains_func = (function() gen_chains(M, N, pareto_rdists)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.02, 1.04, 1.06, 1.08)
+plot_hist(R_matrix_pareto, colors = r_colors, xlabels = xlabels,
+          plot_legend = FALSE, bin_size = 0.003, lim_y_axis = 500)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/pareto_hists-1.png" width="1344" /></p>
+</div>
+<div id="counter-examples-for-rank-rhat" class="section level1">
+<h1>Counter examples for Rank-Rhat</h1>
+<p>In this part, We will see 3 cases where Rank-Rhat doesn’t manage to detect the convergence issue while ours does. There one major reason that make Rank-Rhat close to 1 without convergence is having a between variance close to 0, in other words, having B (between variance) &lt;&lt; W (within variance). As a consequence, if we consider chains with the same mean, then B = 0 even if the distribution differ.</p>
+<div id="gaussienne-uniforme" class="section level2">
+<h2>Gaussienne + uniforme</h2>
+<p>Histograms of 1000 replications of the rank-Rhat, R* and our version. As we see in the histograms, the divergence is not detected in the case of rank-Rhat, all values are less that the fixed threshold which is 1.01, while our version and R* manage to diagnose this convergence issue but with different variance. our <span class="math inline">\(R_{\infty}\)</span> estimated to be 1.016 varies from 1.013 to 1.019 while R*, estimated by 1.118133, has a big variance interval which is [0.945 , 1.334].</p>
+<pre class="r"><code>sigma &lt;- 1/2
+M &lt;- 2
+
+dists &lt;- c((function(q) pnorm(q, mean = 0, sd = sqrt(0.5*pi)*sigma)),
+           (function(q) punif(q, -2*sigma, 2*sigma)))
+
+theoretical_r_values &lt;- r_dist_values(npoints = 1000, xlim = c(-2, 2), 
+                                      dists = dists)
+
+rdists &lt;- c((function(n) rnorm(n, mean = 0, sd = sqrt(0.5*pi)*sigma)),
+            (function(n) runif(n, -2*sigma, 2*sigma)))
+
+chaines &lt;- gen_chains(M, N, rdists)
+simulated_rhat &lt;- all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+xlabels &lt;- c(1, 1.01, 1.02, 1.03, 1.04)
+
+plot_local_r(chaines, simulated_rhat, theoretical_r_values, 
+             xlabels = xlabels, col=c(colors[3], colors[2]),
+             xlim = c(-1.5,1.5), ylim=c(0.999,1.05), title =&quot;Gaussian/Uniform distributions&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/gaussian_uniform_x-1.png" width="1344" /></p>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[4], colors[5], colors[3])
+
+R_matrix_norm_unif &lt;- repetitions_R(chains_func = (function() gen_chains(M, N, rdists)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.01, 1.02, 1.03, 1.04, 1.05)
+plot_hist(R_matrix_norm_unif, colors = r_colors, xlabels = xlabels,
+          bin_size = 0.0025, plot_legend = TRUE,
+          lim_y_axis = reps, vaxis_pos = 0.998)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/gaussian_uniform_hists-1.png" width="1344" /></p>
+</div>
+<div id="laplace-uniforme" class="section level2">
+<h2>Laplace + uniforme</h2>
+<p>The same results holds for this chains. We can see also that Traditional Rhat did not manage to detect this convergence issue.</p>
+<pre class="r"><code>sigma &lt;- 1/4
+
+dists &lt;- c((function(q) plaplace(q, mean = 0, sd = sqrt(2)*sigma)),
+           (function(q) punif(q, -2*sigma, 2*sigma)))
+
+theoretical_r_values &lt;- r_dist_values(npoints = 1000, xlim = c(-1.5, 1.5), 
+                                      dists = dists)
+
+rdists &lt;- c((function(n) rlaplace(n, mean = 0, sd = sqrt(2)*sigma)),
+            (function(n) runif(n, -2*sigma, 2*sigma)))
+
+chaines &lt;- gen_chains(M, N, rdists)
+simulated_rhat &lt;- all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+xlabels &lt;- c(1, 1.01, 1.02, 1.03, 1.04, 1.05)
+
+plot_local_r(chaines, simulated_rhat, theoretical_r_values,
+             xlabels = xlabels, col = c(colors[3], colors[2]),
+             xlim = c(-1.5,1.5), ylim=c(0.999,1.06), title =&quot;Laplace/Uniform distributions&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/laplace_uniform_x-1.png" width="1344" /></p>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[4], colors[5], colors[3])
+
+R_matrix_lapl_unif &lt;- repetitions_R(chains_func = (function() gen_chains(M, N, rdists)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+xlabels = c(1, 1.01, 1.02, 1.03, 1.04, 1.05)
+
+plot_hist(R_matrix_lapl_unif, colors = r_colors, bin_size = 0.0022,
+          xlabels = xlabels, plot_legend = TRUE,
+          lim_y_axis = reps, vaxis_pos = 0.998)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/laplace_uniform_hists-1.png" width="1344" /></p>
+</div>
+<div id="exponential-uniforme" class="section level2">
+<h2>Exponential + uniforme</h2>
+<p>We obtain the same results.</p>
+<pre class="r"><code>M &lt;- 4
+
+min_unif &lt;- 1-2*log(2)
+max_unif &lt;- 1+2*log(2)
+
+
+dists &lt;- c(rep(c((function(q) pexp(q))), M-1),
+           (function(q) punif(q, min_unif, max_unif)))
+
+theoretical_r_values &lt;- r_dist_values(npoints = 500, xlim = c(-1, 6), 
+                                      dists = dists)
+
+rdists &lt;- c((function(n) rexp(n)),
+            (function(n) runif(n, min_unif, max_unif)))
+
+chaines &lt;- gen_chains(M, N, rdists)
+simulated_rhat &lt;- all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+xlabels &lt;- c(1, 1.02, 1.04, 1.06, 1.08, 1.1)
+plot_local_r(chaines, simulated_rhat, theoretical_r_values,
+             xlabels = xlabels, col = c(colors[3], colors[2]),
+             xlim = c(-1, 6), ylim=c(1,1.11), title =&quot;Exponential/Uniform distributions&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/exp_uniform_x-1.png" width="1344" /></p>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[4], colors[5], colors[3])
+
+R_matrix_exp_unif &lt;- repetitions_R(chains_func = (function() gen_chains(M, N, rdists)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+plot_hist(R_matrix_exp_unif, colors = r_colors, bin_size = 0.005, 
+          lim_y_axis = 500, vaxis_pos = 0.998)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/exp_uniform_hists-1.png" width="1344" /></p>
+</div>
+</div>
+<div id="chains-with-the-same-distributions" class="section level1">
+<h1>Chains with the same distributions</h1>
+<p>In this part we want to see if our Rhat can detect the convergence. So we try it on different distributions with same chains: - Uniform distribution. - Pareto distribution.</p>
+<div id="uniform" class="section level2">
+<h2>Uniform</h2>
+<p>the histograms allow us to see the convergence of all the indicators including our Rhat. The values of all histograms are less than 0.003 which is significantly smaller than the threshold set at 1.01. And the same results holds for the other distributions.</p>
+<pre class="r"><code>sup_unif &lt;- 0.5
+M &lt;- 2
+
+uniform_dists &lt;- c(rep(c((function(q) punif(q, -sup_unif, sup_unif))), M))
+
+theoretical_r_values &lt;- r_dist_values(npoints = 1000, xlim = c(-sup_unif, sup_unif), 
+                                      dists = uniform_dists)
+
+uniform_rdists &lt;- c((function(n) runif(n, -sup_unif, sup_unif)),
+                    (function(n) runif(n, -sup_unif, sup_unif)))
+
+chaines = gen_chains(M, N, uniform_rdists)
+simulated_rhat = all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+plot_local_r(chaines, simulated_rhat, theoretical_r_values,
+             col = c(colors[3], colors[2]),
+             xlim = c(-0.6, 0.6), ylim=c(0.99,1.01), title =&quot;Uniform distributions&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/same_uniform_x-1.png" width="1344" /></p>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[4], colors[5], colors[3])
+
+R_matrix_same_unif &lt;- repetitions_R(chains_func = (function() gen_chains(M, N, uniform_rdists)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+plot_hist(R_matrix_same_unif, colors = r_colors, bin_size = 0.0005, 
+          lim_y_axis = 300, vaxis_pos = 0.998)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/same_uniform_hists-1.png" width="1344" /></p>
+</div>
+<div id="pareto" class="section level2">
+<h2>Pareto</h2>
+<pre class="r"><code>eta &lt;- 1
+alpha &lt;- 0.8
+M &lt;- 4
+
+pareto_dists &lt;- c(rep(c((function(q) ppareto(q, location = eta, shape = alpha))), M))
+
+theoretical_r_values &lt;- r_dist_values(npoints = 1000, xlim = c(eta, eta*8), 
+                                      dists = pareto_dists)
+
+pareto_rdists &lt;- c((function(n) rpareto(n, location = eta, shape = alpha)),
+                   (function(n) rpareto(n, location = eta, shape = alpha)))
+
+chaines = gen_chains(M, N, pareto_rdists)
+simulated_rhat = all_local_rhat(chaines, max_nb_points = &quot;ALL&quot;)
+
+plot_local_r(chaines, simulated_rhat, theoretical_r_values,
+             col = c(colors[3], colors[2]),
+             xlim = c(eta, eta*8), ylim=c(0.99,1.01), title =&quot;Pareto distributions&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/same_pareto_x-1.png" width="1344" /></p>
+<pre class="r"><code>r_functions &lt;- c(trad_rhat, rhat, rhat_infinity)
+r_names &lt;- c(&quot;R-hat&quot;, &quot;Rank-R-hat&quot;, &quot;R-hat-infinity&quot;)
+r_colors &lt;- c(colors[4], colors[5], colors[3])
+
+R_matrix_same_par &lt;- repetitions_R(chains_func = (function() gen_chains(M, N, pareto_rdists)), 
+                         r_func = r_functions, 
+                         r_names = r_names, 
+                         reps = reps)
+
+plot_hist(R_matrix_same_par, colors = r_colors, bin_size = 0.0005, 
+          lim_y_axis = 300, vaxis_pos = 0.998)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/same_pareto_hists-1.png" width="1344" /></p>
+<pre class="r"><code># reps &lt;- 50
+# 
+# R_matrix_r_star = repetitions_R(chains_func = (function() gen_chains(M, N, pareto_rdists)), 
+#                          r_func = c(r_star_gbm), 
+#                          r_names = c(&quot;R-star&quot;), 
+#                          reps = reps)
+# 
+# plot_hist(R_matrix_r_star, colors = colors[4], bin_size = 0.08, 
+#           lim_y_axis = 30, vaxis_pos = 0.78)</code></pre>
+</div>
+</div>
+<div id="summary" class="section level1">
+<h1>Summary</h1>
+<pre class="r"><code>data=data.frame(r_version, r_experiment,  r_values)
+
+ggplot(data, aes(x=r_experiment, y=r_values, fill=r_version)) +
+    geom_boxplot() + 
+    geom_hline(yintercept=1.01, linetype=&quot;dashed&quot;, 
+               color = &quot;black&quot;, size=0.5) +
+    xlab(&quot;Experiments&quot;) + ylab(&quot;Values&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/unnamed-chunk-10-1.png" width="1344" /></p>
+<pre class="r"><code>    # + facet_wrap(~r_experiment, scale=&quot;free&quot;, nrow = 1)</code></pre>
+<pre class="r"><code>data2=data.frame(r_version2, r_experiment2,  r_values2)
+
+ggplot(data2, aes(x=r_experiment2, y=r_values2, fill=r_version2)) +
+    geom_boxplot() + 
+    geom_hline(yintercept=1.01, linetype=&quot;dashed&quot;, 
+               color = &quot;black&quot;, size=0.5) +
+    xlab(&quot;Experiments&quot;) + ylab(&quot;Values&quot;)</code></pre>
+<p><img src="Simulations_known_dist_files/figure-html/unnamed-chunk-11-1.png" width="1344" /></p>
+<pre class="r"><code>    # + facet_wrap(~r_experiment, scale=&quot;free&quot;, nrow = 1)</code></pre>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+function bootstrapStylePandocTables() {
+  $('tr.odd').parent('tbody').parent('table').addClass('table table-condensed');
+}
+$(document).ready(function () {
+  bootstrapStylePandocTables();
+});
+
+
+</script>
+
+<!-- tabsets -->
+
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+
+$(document).ready(function () {
+  $('.tabset-dropdown > .nav-tabs > li').click(function () {
+    $(this).parent().toggleClass('nav-tabs-open');
+  });
+});
+</script>
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
