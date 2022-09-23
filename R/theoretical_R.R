@@ -18,14 +18,12 @@ local_r_dist <- function(x, dists){
 }
 
 r_dist_values <- function(npoints, xlim, dists){
-  values <- c()
   grid <- seq(xlim[1], xlim[2], length.out = npoints)
   theoretical_r <- unlist(lapply(grid, (function(x) local_r_dist(x, dists))))
   return(array(c(grid, theoretical_r), c(npoints,2)))
 }
 
 max_r_dist_bivariate <- function(npoints, xlim, dists){
-  values <- c()
   grid1 <- seq(xlim[1], xlim[2], length.out = npoints)
   grid2 <- seq(xlim[1], xlim[2], length.out = npoints)
   max_r = 0
