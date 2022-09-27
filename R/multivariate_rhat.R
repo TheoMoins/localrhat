@@ -41,9 +41,9 @@
 #'
 multivariate_local_rhat <- function(x, chains) {
     dim_ch <- dim(chains)
-    bool_ch <- c()
+    bool_ch <- rep(NA, dim_ch[3])
     for (ch_id in 1:dim_ch[3]) {
-        bool_ch <- c(bool_ch, apply(t(t(chains[, , ch_id]) <= x), 1, all))
+        bool_ch[ch_id] <- apply(t(t(chains[, , ch_id]) <= x), 1, all)
     }
     return (trad_rhat(array(bool_ch, c(dim_ch[1], dim_ch[3]))))
 }
@@ -131,19 +131,19 @@ multivariate_grid_for_R <- function(chains, max_nb_points = 500) {
 #'
 multivariate_directed_local_rhat <- function(x, chains, dir) {
     dim_ch <- dim(chains)
-    bool_ch = c()
+    bool_ch = rep(NA, dim_ch[3])
     for (ch_id in 1:dim_ch[3]) {
-        tmp_ind = c()
+        tmp_ind = rep(NA, dim_ch[2])
         for (dim_id in 1:dim_ch[2]) {
             if (dir[dim_id] == 1) {
-                tmp_ind = c(tmp_ind, chains[, dim_id, ch_id] >= x[dim_id])
+                tmp_ind[dim_id] = chains[, dim_id, ch_id] >= x[dim_id]
             } else {
-                tmp_ind = c(tmp_ind, chains[, dim_id, ch_id] <= x[dim_id])
+                tmp_ind[dim_id] = chains[, dim_id, ch_id] <= x[dim_id]
             }
         }
         tmp_ch = array(tmp_ind, c(dim_ch[1], dim_ch[2]))
 
-        bool_ch = c(bool_ch, apply(tmp_ch, 1, all))
+        bool_ch[ch_id] = apply(tmp_ch, 1, all)
     }
     return (trad_rhat(array(bool_ch, c(dim_ch[1], dim_ch[3]))))
 }
@@ -179,13 +179,13 @@ multivariate_directed_local_rhat <- function(x, chains, dir) {
 #'
 #'
 multivariate_all_local_rhat <- function(chains, dir = NULL, max_nb_points = 500) {
-    tab_rhat = c()
     grid = multivariate_grid_for_R(chains, max_nb_points)
+    tab_rhat = rep(NA, dim(grid)[1])
     for (i in 1:dim(grid)[1]) {
         if (is.null(dir)) {
-            tab_rhat = c(tab_rhat, multivariate_local_rhat(grid[i, ], chains))
+            tab_rhat[i] = multivariate_local_rhat(grid[i, ], chains)
         } else {
-            tab_rhat = c(tab_rhat, multivariate_directed_local_rhat(grid[i, ], chains, dir))
+            tab_rhat[i] = multivariate_directed_local_rhat(grid[i, ], chains, dir)
         }
     }
     return(tab_rhat)

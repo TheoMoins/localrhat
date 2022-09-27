@@ -165,10 +165,7 @@ grid_for_R <- function(chains, max_nb_points = 500) {
 #' #              xlim = c(-1, 1), ylim=c(0.999,1.1), title ="Gaussian distributions")
 #'
 all_local_rhat <- function(chains, max_nb_points = 500) {
-    tab_rhat <- c()
     grid <- grid_for_R(chains, max_nb_points)
-    for (x in grid) {
-        tab_rhat <- c(tab_rhat, local_rhat(x, chains))
-    }
+    tab_rhat <- sapply(grid, function(x) local_rhat(x, chains))
     return(tab_rhat)
 }
