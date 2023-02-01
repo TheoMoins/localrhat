@@ -8,6 +8,7 @@ This repository contains R package `localrhat`, which implements a local version
 
 # Resources 
 
- - [ArXiv](https://arxiv.org/pdf/2205.06694.pdf)
- - [Online Appendix](https://theomoins.github.io/localrhat/Simulations.html)
+ - [ArXiv](https://arxiv.org/pdf/2205.06694.pdf) of the paper associated to this local version R-hat
+ - [Online appendix](https://theomoins.github.io/localrhat/Simulations.html) that contains all the experiments using R
+ - [Additional experiments](https://theomoins.github.io/localrhat/Simulations_ot.html) on the multivariate case using Python and OpenTurns
 
