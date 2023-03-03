@@ -14,15 +14,9 @@ local_ess <- function(x, chains) {
 
 
 all_local_ess <- function(chains, max_nb_points = 500) {
-    tab_rhat <- c()
     grid <- grid_for_R(chains, max_nb_points)
-    for (x in grid) {
-        if (!is.na(local_ess(x, chains))){
-            ess_x <- local_ess(x, chains)
-        }
-        tab_rhat <- c(tab_rhat, ess_x)
-    }
-    return(tab_rhat)
+    tab_rhat <- sapply(grid, function(x) local_ess(x, chains))
+    return(tab_rhat[!is.na(tab_rhat)])
 }
 
 ess_infinity <- function(chains, dir = NULL, max_nb_points = 500) {

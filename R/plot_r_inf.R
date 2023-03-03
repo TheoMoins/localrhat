@@ -95,31 +95,33 @@ plot_hist <- function(R_matrix, colors = c("red", "blue", "green", "yellow"),
     # abline(v=threshold, lty=2, lwd=4)
   }
 
-  r_exp = c()
-  for (i in 1:length(r_names)){
+  I <- length(r_names)
+  r_exp <- rep(NA, I)
+
+  for (i in 1:I){
     if (!is.expression(r_names[i])){
       if (r_names[i] == "R-hat"){
-        r_exp = c(r_exp, expression(italic(hat(R))))
+        r_exp[i] = expression(italic(hat(R)))
       }
     }
     if (!is.expression(r_names[i])) {
       if (r_names[i] == "Rank-R-hat"){
-        r_exp = c(r_exp, expression(italic(Rank-hat(R))))
+        r_exp[i] = expression(italic(Rank-hat(R)))
       }
     }
     if (!is.expression(r_names[i])) {
       if (r_names[i] == "Brooks Multivariate R-hat"){
-        r_exp = c(r_exp, expression(italic(hat(R))))
+        r_exp[i] = expression(italic(hat(R)))
       }
     }
     if (!is.expression(r_names[i])) {
       if (r_names[i] == "R-hat-infinity"){
-        r_exp = c(r_exp, expression(italic(hat(R)[infinity])))
+        r_exp[i] = expression(italic(hat(R)[infinity]))
       }
     }
     if (!is.expression(r_names[i])) {
       if (r_names[i] == "max-R-hat"){
-        r_exp = c(r_exp, expression(italic(max-hat(R)[infinity])))
+        r_exp[i] = expression(italic(max-hat(R)[infinity]))
       }
     }
   }
@@ -132,4 +134,3 @@ plot_hist <- function(R_matrix, colors = c("red", "blue", "green", "yellow"),
     }
   }
 }
-

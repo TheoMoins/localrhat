@@ -152,8 +152,8 @@ rhat_infinity_max_directions <- function(chains,
 
     dim_params = dim(chains)[2]
 
-    # Vector that will contains the different R-hat infinity:
-    directed_rhat_inf = c()
+    # max R-hat infinity:
+    directed_rhat_inf <- -Inf
 
     # Vector with the ids of the different directions:
     directions_idx = 0:(2^(dim_params - 1) - 1)
@@ -162,14 +162,13 @@ rhat_infinity_max_directions <- function(chains,
     if (!is.null(nb_directions)) {
         directions_idx = sample(directions_idx, nb_directions, replace = F)
     }
-    for (i in directions_idx) {
 
+    for (i in seq_along(directions_idx)) {
         directions = as.integer(intToBits(i))
-
-        directed_rhat_inf = c(directed_rhat_inf, rhat_infinity(chains, directions, max_nb_points))
-
+        rhat_inf <- rhat_infinity(chains, directions, max_nb_points)
+        if (rhat > directed_rhat_inf) {
+            directed_rhat_inf <- rhat
+        }
     }
-    return(max(directed_rhat_inf))
+    return(directed_rhat_inf)
 }
-
-
