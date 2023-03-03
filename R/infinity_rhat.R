@@ -59,14 +59,35 @@
 #' #           lim_y_axis = 15, vaxis_pos = 1.015,
 #' #           plot_threshold = F)
 #'
-rhat_infinity <- function(chains, dir = NULL, max_nb_points = 500) {
+rhat_infinity <- function(chains, dir = NULL, max_nb_points = 500, verbose = F) {
     # Check the dimension to use the univariate or multivariate R-hat :
     if (length(dim(chains)) == 2) {
-        val_rhat = all_local_rhat(chains, max_nb_points)
+        m <- dim(chains)[2]
+        val_rhat <- all_local_rhat(chains, max_nb_points)
     } else {
-        val_rhat = multivariate_all_local_rhat(chains, dir, max_nb_points)
+        m <- dim(chains)[3]
+        val_rhat <- multivariate_all_local_rhat(chains, dir, max_nb_points)
     }
-    return(max(val_rhat[is.finite(val_rhat)]))
+    res <- max(val_rhat[is.finite(val_rhat)])
+    if (verbose){
+        rlim <- rlim_inf(m = m)
+        cat(paste("Threshold at confidence level 5%: ", rlim))
+        cat(paste("\nLocal R-hat obtained: ", round(res, digits = 4)))
+        if (m < 11){
+            pval <- p_value_r_inf(res, m)
+            if (pval == 0){
+                cat(paste("\np-value: < 0.001"))
+            } else {
+                cat(paste("\np-value: ", pval))
+            }
+        }
+        if (res > rlim){
+            cat("\nWARNING: A convergence issue has been diagnosed\n")
+        } else {
+            cat("\nAt 5%, no convergence issues have been diagnosed\n")
+        }
+    }
+    return(res)
 }
 
 
@@ -74,7 +95,7 @@ rhat_infinity <- function(chains, dir = NULL, max_nb_points = 500) {
 #' Symmetrical version of \eqn{\hat{R}_\infty} in the multivariate case.
 #'
 #' Compute the multivariate version of \eqn{\hat{R}_\infty} in all possible
-#' dependence direction and return the maximum values.
+#' dependence direction and return the maximum value.
 #'
 #' @param chains an array of size \eqn{n \times d \times m}, where \eqn{n} is
 #' the length of the chains, \eqn{m \geq 2} is the number of chains and \eqn{d}

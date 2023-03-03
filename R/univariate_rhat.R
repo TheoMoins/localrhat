@@ -39,6 +39,9 @@ trad_rhat <- function(chains) {
 #' of \eqn{\hat{R}(x)}.
 #' @param chains an array of size \eqn{n \times m} where \eqn{n} is the length of
 #' the chains and \eqn{m \geq 2} is the number of chains.
+#' @param verbose a boolean indicating if a suggested threshold is printed with
+#' the value of \eqn{\hat{R}(x)}. This threshold is associated to a type I error
+#' of 0.05.
 #'
 #' @return The local-\eqn{\hat{R}(x)} computed on the \eqn{m} chains.
 #'
@@ -70,10 +73,26 @@ trad_rhat <- function(chains) {
 #' x <- 0.5
 #' # local_rhat(x, chains)
 #'
-local_rhat <- function(x, chains) {
+local_rhat <- function(x, chains, verbose=F) {
     res <- trad_rhat(chains <= x)
-    if (is.na(res)) {
+    if (is.na(res)){
         res <- 1
+    }
+    if (verbose){
+        rlim <- rlim_x(m = dim(chains)[2])
+        cat(paste("Threshold at confidence level 5%: ", rlim))
+        cat(paste("\nLocal R-hat obtained: ", round(res, digits = 4)))
+        pval <- p_value_r_x(res, dim(chains)[2])
+        if (pval == 0){
+            cat(paste("\np-value: < 0.001"))
+        } else {
+            cat(paste("\np-value: ", pval))
+        }
+        if (res > rlim){
+            cat("\nWARNING: A convergence issue has been diagnosed")
+        } else {
+            cat("\nAt 5%, no convergence issues have been diagnosed\n")
+        }
     }
     return(res)
 }

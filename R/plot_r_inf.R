@@ -91,8 +91,8 @@ plot_hist <- function(R_matrix, colors = c("red", "blue", "green", "yellow"),
     abline(v=1.01, lty=2, lwd=4)
   }
   if (threshold > 1.01){
-    # abline(v=threshold, lty=2, lwd=4, col = colors[length(colors)])
-    abline(v=threshold, lty=2, lwd=4)
+    abline(v=threshold, lty=2, lwd=4, col = colors[length(colors)])
+    # abline(v=threshold, lty=2, lwd=4)
   }
 
   r_exp = c()
