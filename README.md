@@ -1,6 +1,6 @@
 This repository contains R package `localrhat`, which implements a local version of the Gelman-Rubin diagnostic R-hat:
 
-T. Moins, J. Arbel, S. Girard, & A. Dutfoy. (2023): “On the use of a local R-hat to improve MCMC convergence diagnostic” Bayesian Anal. (Advance Publication), 1-26, (2023) DOI: 10.1214/23-BA1399
+T. Moins, J. Arbel, S. Girard, & A. Dutfoy. “On the use of a local R-hat to improve MCMC convergence diagnostic” Bayesian Anal. (Advance Publication), 1-26, (2023) DOI: 10.1214/23-BA1399
 
 # Resources 
 
